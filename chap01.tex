@@ -7,10 +7,10 @@ and was soon obsoleted. Latest specification can be found in \rfc{1112}.
 
 In local networks, multicasts are similar to broadcasts. Every packet is to be
 transmitted to every host on that link, and host can decide according to
-destination address whether or not receive and process it.
+destination address whether or not to receive and process or drop it.
 
 Differences are notable on internetwork level. While broadcasts should be
-either forwarded to all links (or filtered completely) by router, multicasts
+either forwarded to all links or filtered completely by routers, multicasts
 should have more controled behavior.
 
 \section{Multicast group}
@@ -19,13 +19,13 @@ First term we need to understand is multicast group. It is represented by an IP
 address allocated from dedicated region \prefix{224.0.0.0/4}. It is further
 divided (as per \rfc{5771}) to:
 
-\begin{tabular}{lll}
-	224.0.0&/24	& Local Network Control Block \\
-	224.0.1&/24	& Internetwork Control Block \\
-	224.2&/16	& SDP/SAP Block \\
-	232&/8		& Source-Specific Multicast Block \\
-	233&/8		& GLOP Block \\
-	239&/8		& Administratively Scoped Block \\
+\begin{tabular}{r@/l l}
+	224.0.0&24	& Local Network Control Block \\
+	224.0.1&24	& Internetwork Control Block \\
+	224.2&16	& SDP/SAP Block \\
+	232&8		& Source-Specific Multicast Block \\
+	233&8		& GLOP Block \\
+	239&8		& Administratively Scoped Block \\
 \end{tabular}
 
 And to AD-HOC blocks in between.
@@ -33,14 +33,16 @@ And to AD-HOC blocks in between.
 Host membership in group is fully optional. Neither number of members in group,
 nor number of groups host belongs to, is limited and can be even zero. Host
 does not have to belong to group to send packets into it. Packets are
-distributed in the same "best effort" manner as unicasts -- packets can be
+distributed in the same "best effort" manner as unicast ones -- can be
 delivered to all, some or no hosts, in any order.
 
 There are three levels of conformance with IP multicast. Level 0 means no
 conformance. Level 1 requires host to be able to send packets to multicast
-groups. This level still requires little code in networking stack, because
-sending packet to multicast group is essentialy the same as sending it as
-unicast packet with destination set to the group address.
+groups. This level still requires little little code in networking stack, because
+sending packet to multicast group is very similar to sending it as unicast
+packet with destination set to the group address. While it doesn't make much
+sense to send unicast packets destinated outside local network prefix directly
+to link, it is expected behavior with multicast.
 
 Level 2 means fully conformant, and requires implementation of the host part of
 Internet Group Management Protocol (IGMP).
@@ -48,55 +50,50 @@ Internet Group Management Protocol (IGMP).
 \section{Internet Group Management Protocol}
 
 Current version of IGMP is 3, and is described in \rfc{3376}. However, all
-versions are backward compatible. All nodes in one network falls back to the
-least version all of them support.
+versions are backward compatible. All nodes in one network fall back to the
+least version that all of them support.
 
 Purpose of IGMP is to exchange information between hosts and routers about
 group membership. Note that it is mandatory to implement IGMP to be part of
-multicast group, but until multicasts cross boundary of one network, it is
-delivered as broadcast to all hosts.
+multicast group, but until multicast packet crosses boundary of one network, it
+is delivered as broadcast to all hosts. As such all hosts receive it without
+the routers knowledge.
 
-Let's start with IGMP version 1 specified in Appendix I. of \rfc{1112}. There
+Let us start with IGMP version 1 specified in Appendix I. of \rfc{1112}. There
 are just two types of messages: membership query and membership report.
-
 Membership query is sent periodically by routers, and announces to hosts there
-is IGMPv1 capable router. This query is sent to group \ip{224.0.0.1} with TTL 1, and
-therefore is local network limited.
-
-Every host is ought to be member of this group, hence the common name
-ALL-HOSTS. When hosts receives query, replies with membership report in random
-delay up to 10 seconds. No host should send a report for this group.
+is IGMPv1 capable router. This query is sent to group \ip{224.0.0.1} with TTL
+1, and therefore is local network limited. Every host is ought to be member of
+this group, hence the common name ALL-HOSTS. When hosts receives query, replies
+with membership report in random delay up to 10 seconds. No host should send
+a report for this group.
 
 Report is sent to the group being reported. As noted above, host does not have
 to report to listen. Filtering multicast traffic is made by other means.
 Sending a report declares there is someone interested in this group on this
-particular link.
+particular link. When, during the random delay, host receives a report, it
+stops his own timer and remain silent. This reduces the amount of control
+traffic. When host decides to leave a group, it does nothing. If it was the
+only host in that group, on the next query no one will report and routers will
+stop forwarding.
 
-When, during the random delay, host receives a report, it stops his own timer.
-This reduces the amount of control traffic.
-
-When host decides to leave a group, it does nothing. If it was the only host in
-that group, on the next query no one will report and routers will stop
-forwarding.
-
-IGMPv2 \cite{rfc2236} comes with some major changes. First, router can send query to one
-specific group. That means it can keep timer for every group separately, and
-asking for reports doess not generate unnecessary trafic in every other group.
-
-Second, the maximum delay between query and report (previously fixed 10
-seconds) is now specified in each query, and is configurable. Network
-administrator can tune this variable for his needs. By turning it down, hosts
-will reply faster and routers can faster stop forwarding. Giving longer delays
-can improve stability on very slow or unreliable links.
+IGMPv2 \cite{rfc2236} comes with some major changes. First, router can send
+query to one specific group. That means it can keep timer for every group
+separately, and asking for reports does not generate unnecessary trafic in
+every other group. Second, the maximum delay between query and report
+(previously fixed 10 seconds) is now specified in each query, and is
+configurable. Network administrator can tune this variable for his needs. By
+turning it down, hosts will reply faster and routers can faster stop
+forwarding. Giving longer delays can improve stability on very slow or
+unreliable links.
 
 The most notable change though is new message type - leave group. When host
 sends a report, it sets a flag. Other hosts without flag remain silent. When
 flagged host leaves a group, it sends the leave group message. Other hosts
-react to orher host's leave in similar way to query.
-
-When router hears leave, it starts a timer. This timer can be stopped by
-receiving report. Expiring this timer immediately changes this group state to
-not having any members. This way less unnecessary traffic is forwarded.
+react to orher hosts leave in similar way to query. When router hears leave,
+it starts a timer. This timer can be stopped by receiving report. Expiring this
+timer immediately changes this group state to not having any members. This way
+less unnecessary traffic is forwarded.
 
 IGMPv3 comes with additional fields and more complex protocol logic. It is
 dedicated to source-specific multicast forwarding and includes messages to keep
@@ -155,13 +152,13 @@ When application wants to receive unicast trafic, it opens a socket:
 
 \TODO{Example -- code calling join}
 
-One thing to note here. When there's socket opened which joined group, the host
+One thing to note here. When there is socket opened which joined group, the host
 itself joins the group y means of IGMP. And when host is joined, every other
 multicast enabled socket will get packets addressed to that group. So, you
 still need to filter those at application level.
 
 \noindent When router wants to receive all IGMP packets for all groups, it
-would have to join every group possible. That's certainly not the way to go.
+would have to join every group possible. That is certainly not the way to go.
 
 IGMPv2 suggests using IP option Router Alert. Every IP packet with this option
 set should be passed to sockets which orders it by this setsockopt call:
@@ -187,9 +184,9 @@ There can be only one socket on which MRT\_INIT succeeds. This is the one
 control socket, through which we can control multicast routing tables.
 
 This part could be relatively easily rewritten (at kernel side) to some sane
-netlink api. But there's more -- this is the only socket, which receives all
+netlink api. But there is more -- this is the only socket, which receives all
 IGMP packets.
 
-So, it's not even theoretically possible to run mmore than one multicast
+So, it is not even theoretically possible to run mmore than one multicast
 routing daemon on one system.\footnote{Unless isolating them in different
 network namespaces, more about it later.}
