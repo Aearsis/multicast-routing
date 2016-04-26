@@ -1,0 +1,28 @@
+\chapter*{Introduction}
+\addcontentsline{toc}{chapter}{Introduction}
+
+World of unicast routing is well habitated. There are lots of uinicast routing
+protocols with completely divergent approaches. When it comes to routing
+multicast traffic, much is different.
+
+As multicast was added as an extension to IPv4, there was lack of support on
+network nodes -- and multicast is one of those things that needs all nodes to
+support it, or doesn't work at all. In the first chapter I would like to % ref: first chapter
+explain how multicast and multicast routing works in general.
+
+The protocol chosen for this thesis is PIM-BIDIR. It is somehow simplified
+protocol from the PIM family, because it doesn't need to hold state information
+based on traffic source. That makes it less demanding on network hardware.
+Second chapter is dedicated to explaining how protocol works. % ref second chapter
+
+My goal didn't contain writing standalone multicast router application. There
+are multiple of those already (none well known doing PIM-BIDIR though). Some
+advantages come from having unicast and multicast routing in one daemon, so the
+goal was to extend BIRD. It was school project similar to mine, but grew to
+worldwide use. In third chapter you can find overview of current BIRD % ref: third chapter
+architecture.
+
+Finally, there were decisions made in implementing multicast routing into BIRD.
+These are summarized in the fourth chapter.
+
+

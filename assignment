@@ -1,0 +1,39 @@
+Téma: Multicast routing in BIRD
+
+--
+
+Cílem práce bude implementovat podporu pro směrování multicastu do směrovacího
+démonu BIRD. BIRD aktuálně podporuje pouze směrování unicastu.
+
+Práce se skládá z implementace tří komunikačních protokolů: rozhraní mezi
+démonem a jádrem operačního systému pro úpravu směrovacích tabulek multicastu,
+protokolů IGMP a PIM.
+
+Pro účely práce student implementuje protokol PIM ve variantě BIDIR, ale zbylé
+části by měly být navrženy obecně pro podporu libovolného multicastového
+protokolu.
+
+---
+
+The goal of the thesis is to implement support for multicast routing in the
+BIRD routing daemon. BIRD is well designed to support more unicast routing
+protocols at a time, but there is currently no support to route multicast.
+
+In order to be able to route multicast traffic, BIRD will need its internals
+adapted to hold additional information needed and also add completely new
+kernel interface to multicast routing tables.
+
+Then, it is needed to implement IGMP to communicate with hosts.
+
+Finally, one can implement multicast routing protocols. For purpose of this
+thesis, student should implement PIM in bidirectional variant, which has the
+advantage of not having to hold state for every multicast traffic source, and
+also does not have to temporarily encapsulate multicast trafic to unicast
+packets.
+
+---
+
+Literatura:
+RFC 2236 - Internet Group Management Protocol, Version 2
+RFC 5015 - Bidirectional Protocol Independent Multicast (BIDIR-PIM)
+http://bird.network.cz/ - BIRD Internet Routing Daemon
