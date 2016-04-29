@@ -110,56 +110,47 @@ Even though multicast is specified on network layer, it needs some level of
 support from link layer. Let me explain how multicast traffic integrates with
 the most common combination of IP over ethernet.
 
-First problem we need to solve is, which link layer address to use for
-multicast group addresses. When sending unicast packet, ARP is used to
-determine link layer address. As multicast is technically a broadcast on link
-layer, it would be possible to use broadcast address \mac{FF:FF:FF:FF:FF:FF}.
-
+First problem we need to solve is which MAC address to use for multicast group
+addresses. When sending unicast packet, ARP is used to determine MAC address.
+As multicast is technically a broadcast on link layer, it would be possible to
+use broadcast address \mac{FF:FF:FF:FF:FF:FF}.
 But that would mean every multicast packet on network must be received by all
 hosts and examined by operating systems, because there is no way how to filter
 it on hardware level. For this purpose, every ethernet address that starts with
 1 (that means, the least significant bit of the first byte) is considered to be
 broadcast address and is to be flooded to all nodes on this network. Network
-hardware generally do not make difference between them. So We can associate
+hardware generally do not make difference between them, so we can associate
 specific meaning to diferent MAC addresses.
 
 For IPv4 multicast, region of MAC addresses was allocated. This region starts
 at \mac{01:00:5E:00:00:00} and ends with \mac{01:00:5E:7F:FF:FF}. To construct
 MAC address from multicast group address, one puts lower 23 bits of IP address
-to lower bits of the MAC address.
-
-This way, network interfaces can implement rough filter, that can drop frames
-host knows nothing about. Additional filtering is still needed because of those
-missing bits.
+to lower bits of the MAC address. This way, network interfaces can implement
+rough filter, that can drop frames host knows nothing about. Additional
+filtering is still needed because of those missing bits.
 
 Multicast router needs to receive packets for all groups, because IGMP reports
 are sent there. To enable this behavior NICs often have "all multicast" mode,
 which lets al multicast frames pass through. Or we can put the NIC to
-promiscuous mode, which passes all frames to CPU.
+promiscuous mode, which passes all frames to the operating system.
 
 Receiving all those packets in daemon is another story.
 
 \section{Kernel implementation}
 
 Kernel interface for multicast is pretty complicated. At least differences
-between UNIXes are not big.
+between UNIXes are not big. When program wants to receive multicast trafic,
+it opens a socket and sets it up by some setsockopt calls:
 
-When application wants to receive unicast trafic, it opens a socket:
+\TODO{Example -- code to open socket, set up multicast, join group, ...}
 
-\TODO{Example -- code to open socket}
-
-\noindent Then, joining and leaving groups are made by setsockopt calls:
-
-\TODO{Example -- code calling join}
-
-One thing to note here. When there is socket opened which joined group, the host
+\noindent One thing to note here. When there is socket opened which joined group, the host
 itself joins the group y means of IGMP. And when host is joined, every other
 multicast enabled socket will get packets addressed to that group. So, you
 still need to filter those at application level.
 
-\noindent When router wants to receive all IGMP packets for all groups, it
+When router daemon wants to receive all IGMP packets for all groups, it
 would have to join every group possible. That is certainly not the way to go.
-
 IGMPv2 suggests using IP option Router Alert. Every IP packet with this option
 set should be passed to sockets which orders it by this setsockopt call:
 
@@ -181,12 +172,11 @@ sequence of setsockopt calls is needed:
 \TODO{Example -- socket, MRT\_INIT, MRT\_PIM}
 
 There can be only one socket on which MRT\_INIT succeeds. This is the one
-control socket, through which we can control multicast routing tables.
+control socket, through which we can control multicast routing tables in a way
+explained below. This part could be relatively easily rewritten (at kernel
+side) to some sane netlink api.
 
-This part could be relatively easily rewritten (at kernel side) to some sane
-netlink api. But there is more -- this is the only socket, which receives all
-IGMP packets.
-
-So, it is not even theoretically possible to run mmore than one multicast
-routing daemon on one system.\footnote{Unless isolating them in different
-network namespaces, more about it later.}
+But, there is more -- this is the only socket on a host, which receives all
+IGMP packets. So, it is not even theoretically possible to run mmore than one
+multicast routing daemon on one system.\footnote{Unless isolating them in
+different network namespaces, more about it later.}
