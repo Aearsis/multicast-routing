@@ -2,7 +2,7 @@
 
 Unicast routing protocols try to cooperatively build a tree for every
 destination network. This tree is a spanning tree over some graph of networks,
-and is rooted at its destination. Every packet travels up the tree until it
+and is rooted at its destination. Every packet travels up the tree until
 reaching its destination.
 
 Multicast packets have no single destination, so multicast routing protocols
@@ -16,20 +16,24 @@ routing protocols at a time and share information between them. One can for
 example route unicast traffic using BGP and use OSPF with different metric to
 supply completely different topology to multicast routing.
 
-Every group has its \emph{Rendezvous-point} address associated. Assigning it is
-a matter of local configuration. RP address is simply an MRIB routable
-address. MRIB is used to build a RP tree, where every router knows its upstream
-(link towards RP). Network segment where RP address belongs is called RP link
-(RPL).
+Every group managed by PIM has its \emph{Rendezvous-point} address (RPA)
+associated. Assigning it is a matter of local configuration. RP is a router
+specially configured for this purpose. Unicast delivery tree for RPA is then
+called RP tree. With respect to this tree we can define a few more terms:
 
-Protocols from PIM family have some behaviour in common. On every link other
-than RPL belongs election takes place. Winning router is called
+\emph{Rendezvous-point link} is simply a link where RP address belongs.
+\emph{Upstream interface} for every router is the next-hop interface towards
+RP, and \emph{upstream neighbor} is the next-hop router.
+
+While unicast packet at first hops over a number of routers, then it is sent to
+its destination, multicast packets are always sent on the link directly. This
+way every router on link can hear it. In order to avoid duplicate forwards, on
+every link other than RPL election takes place. Winning router is called
 \emph{designated router}. This designated router is responsible for
-distribution of information taken from IGMP messages to other routers. This is
-made by Join/Prune messages. This mechanism is almost reimplementation of
-IGMPv2 in PIM context. When there is a host on link which joined group $G$ by
-IGMP, or any router that joined $G$ by PIM, DR joins $G$ on
-its upstream.
+distribution of information taken from IGMP messages to upstream neighbor. This
+is made by PIM Join/Prune messages. This mechanism is almost reimplementation
+of IGMPv2 in PIM context. When there is a host on link which joined group $G$
+by IGMP, or any router that joined $G$ by PIM, DR joins $G$ on its upstream.
 
 Let me first explain briefly how PIM Sparse mode works. Suppose there already
 is a tree built for group $G$ with some listeners. Suddenly node $S$ starts
@@ -38,7 +42,7 @@ packets and encapsulates them into ordinary unicast packets. These are then
 sent to RP with special type of PIM messages. This is done actively by the
 routing daemon. RP decapsulates them, and temporarily distributes them down the
 tree. Routers are responsible for picking packets coming on upstream and
-forwarding them down on links where they are designated routers.
+forwarding them down on links where they are acting as designated routers.
 
 In the meantime, $A$ communicates with RP through some routers in between. They
 all establish a multicast routed path exclusively for this source. Then
@@ -63,3 +67,48 @@ responsibilities. There are differences in how the election works. RP can be
 just unicast routable address, and is used just as virtual root of the
 distribution tree. Every multicast packet from any source than travels up the
 tree, being forwarded by DFs, and then down to branches having listeners.
+
+\subsection{Designated forwarder election}
+
+Every router running PIM-BIDIR knows from MRIB what its upstream interface is,
+and its metric towards RP. Router cannot be DF on its upstream link, so
+whenewer it sends offer, advertises infinite metric. Election never takes place
+on RPL, because it is the upstream link for every router.
+
+There are four types of messages in the election: Offer, Winner, Backoff and
+Pass. Routers advertise their metrics as pairs of (protocol preference, distance).
+State machine with all details is described in \rfc{5051}. The main idea of the
+election is that every router advertises it's metric in Offer messages. When
+a router hears better Offer, it remains silent for a while. If not, after
+advertising its metric three times, it claims itself a winner. Winning is
+announced by Winner messages, and every other router notes sender as the
+winner and remembers its metric.
+
+Two noteworthy events may happen. If winner changes its metric to worse value,
+it reannounces itself as a winner. When any other router has better metric,
+replies with an Offer immediately. Similarly, when losing router changes its
+metric to be better than winner's, it sends an Offer.
+
+When metric changes at one router, it is often reaction to some router losing
+link, and means this change will propagate to other routers, changing their
+metric too. In order to spare bandwidth, current winner reacts to better offer
+with a Backoff message. It instructs target router to wait a while until
+unicast routing stabilizes. After a short period without other Offers, winner
+passes DF role in Pass message.
+
+\subsection{Packet forwarding}
+
+Suppose source $S$ starts transmitting packets on its link $L_0$. Then
+currently acting DF will forward them immediately to its upstream link $L_1$.
+DF on $L_1$ forwards it to its upstream, $L_2$, and so on. This is repeated
+until the packet reaches RPL. As there is no DF on RPL, forwarding up stops
+there.
+
+Simultaneously, all routers listen for packets on their upstream links, and
+forwards packets from there to links where they are acting DFs. This way packet
+is forwarded from $L_0, L_1, \dots$ in reverse direction -- downstream.
+Downstream forwarding is conditioned by having listeners active. Upstream
+forwarding needs to be done even when there are no listeners.
+
+You can see that every DF can forward packets for one group upstream and
+downstream at the same time, explaining the name "Bidirectional".
