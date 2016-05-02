@@ -1,28 +1,55 @@
 \chapter*{Introduction}
 \addcontentsline{toc}{chapter}{Introduction}
 
-World of unicast routing is well habitated. There are lots of uinicast routing
-protocols with completely divergent approaches. When it comes to routing
-multicast traffic, much is different.
+% short intro to uni/broad/multicast
 
-As multicast was added as an extension to IPv4, there was lack of support on
-network nodes -- and multicast is one of those things that needs all nodes to
-support it, or doesn't work at all. In the first chapter I would like to % ref: first chapter
-explain how multicast and multicast routing works in general.
+There are multiple ways how to use computer network to communicate between two
+or more machines. In the most common technology, based on Internet Protocol
+(IP), one can send a message (called packet) from one machine, destined to
+another one. That is usually called unicast and is by far the most well known
+method. Or one can send a packet to all machines in some network -- that is
+called broadcast. However, there are appliciations where both of these
+are suboptimal. Good example can be conference telephony, games or video
+streaming.
+
+When public television company broadcasts final match at Olympic games, it can
+have millions of receivers. The company do not want to send every packet in
+millions of copies by unicast. However, it does not want to flood every
+computer connected to Internet by broadcast either. That is why multicast have
+been invented. Multicast is a general way how to transmit traffic from group of
+sources to group of listeners.
+
+In order to deliver packets between networks, the network itself has to do some
+computations. One of them is routing -- collaboratively finding optimal path
+for packet, for some definition of optimal.
+World of unicast routing is well habitated. There are lots of unicast routing
+protocols with completely different approaches. When it comes to routing
+multicast, much is different.
+
+Multicast itself was added as an extension to IPv4 and requires special
+handling in network hardware. When just one router on a way does not support
+it, multicast will not work. As such it suffered from lack of support for long
+time. And because this support was often broken, it is still not widely used.
+
+Supporting multicast on the side of receiver is easy, and one can receive
+multicast in all current major operating systems. For example in UNIXes, it is
+a matter of few syscalls. But trouting multicast traffic is a different thing
+-- one needs to run a routing daemon that communicates with hosts and other
+routers, speaks at least two different network protocols and controls the
+kernel's routing tables. There already are such daemons that are traditionally
+used: e.g. mrouted and pimd.
+
+Purpose of this thesis is to explain how multicast works, introduce reader to
+world of multicast routing and implement one of existing multicast routing
+protocols. It would make no sense to implement another standalone routing
+daemon.
+
+There once was a student project, that grew to worldwide usage -- The BIRD
+internet routing daemon. It currently supports handful of unicast routing
+protocols at a time. There are use-cases in which having closer communication
+between unicast and multicast routing can be advantage. Let the primary goal of
+this thesis be to teach BIRD multicast routing.
 
 The protocol chosen for this thesis is PIM-BIDIR. It is somehow simplified
 protocol from the PIM family, because it doesn't need to hold state information
 based on traffic source. That makes it less demanding on network hardware.
-Second chapter is dedicated to explaining how protocol works. % ref second chapter
-
-My goal was not writing standalone multicast router application. There
-are multiple of those already (none well known doing PIM-BIDIR though). Some
-advantages come from having unicast and multicast routing in one daemon, so the
-goal was to extend BIRD. It was school project similar to mine, but grew to
-worldwide use. In third chapter you can find overview of current BIRD % ref: third chapter
-architecture.
-
-Finally, there were decisions made in implementing multicast routing into BIRD.
-These are summarized in the fourth chapter.
-
-

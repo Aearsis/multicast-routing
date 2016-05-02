@@ -1,40 +1,35 @@
 \chapter{Multicast in IPv4}
 
-IP multicast was added as an additional addressing model to unicast. First
+IP multicast was added as an additional addressing model. First
 references can be found in \rfc{966}. This RFC defines multicast traffic
 with many responsibilities for routers (called "multicast agents" in that time)
 and was soon obsoleted. Latest specification can be found in \rfc{1112}.
 
 In local networks, multicasts are similar to broadcasts. Every packet is to be
 transmitted to every host on that link, and host can decide according to
-destination address whether or not to receive and process or drop it.
+destination address whether or not to receive and process or drop it. In other
+words, you need neither a multicast routing capable router, nor any special
+network hardware to use multicast in one network.
 
 Differences are notable on internetwork level. While broadcasts should be
 either forwarded to all links or filtered completely by routers, multicasts
 should have more controled behavior.
 
-\section{Multicast group}
+\section{Multicast groups}
 
 First term we need to understand is multicast group. It is represented by an IP
 address allocated from dedicated region \prefix{224.0.0.0/4}. It is further
-divided (as per \rfc{5771}) to:
-
-\begin{tabular}{r@/l l}
-	224.0.0&24	& Local Network Control Block \\
-	224.0.1&24	& Internetwork Control Block \\
-	224.2&16	& SDP/SAP Block \\
-	232&8		& Source-Specific Multicast Block \\
-	233&8		& GLOP Block \\
-	239&8		& Administratively Scoped Block \\
-\end{tabular}
-
-And to AD-HOC blocks in between.
+divided into blocks, which have additional semantics. From routing point of
+view, only the Local Network Control Block (\prefix{224.0.0.0/24} is
+interesting. Multicasts in this group must never be forwarded and must never
+cross the boundary of local network. This block is often used for unicast
+routing protocols communication.
 
 Host membership in group is fully optional. Neither number of members in group,
 nor number of groups host belongs to, is limited and can be even zero. Host
 does not have to belong to group to send packets into it. Packets are
 distributed in the same "best effort" manner as unicast ones -- can be
-delivered to all, some or no hosts, in any order.
+delivered to all, some or no hosts, and in any order.
 
 There are three levels of conformance with IP multicast. Level 0 means no
 conformance. Level 1 requires host to be able to send packets to multicast
@@ -42,12 +37,16 @@ groups. This level still requires little little code in networking stack, becaus
 sending packet to multicast group is very similar to sending it as unicast
 packet with destination set to the group address. While it doesn't make much
 sense to send unicast packets destinated outside local network prefix directly
-to link, it is expected behavior with multicast.
+to link, it is the expected behavior with multicast.
 
-Level 2 means fully conformant, and requires implementation of the host part of
-Internet Group Management Protocol (IGMP).
+Level 2 means fully conformant, able to send and receive multicast traffic.
 
 \section{Internet Group Management Protocol}
+
+As already said, membership in multicast group is optional. By default, there
+is only one group that every host listens to - named ALL-HOSTS with address
+\ip{224.0.0.1}. There must be way for hosts to express group membership.
+A protocol was set for this purpose, and is called IGMP.
 
 Current version of IGMP is 3, and is described in \rfc{3376}. However, all
 versions are backward compatible. All nodes in one network fall back to the
@@ -62,11 +61,10 @@ the routers knowledge.
 Let us start with IGMP version 1 specified in Appendix I. of \rfc{1112}. There
 are just two types of messages: membership query and membership report.
 Membership query is sent periodically by routers, and announces to hosts there
-is IGMPv1 capable router. This query is sent to group \ip{224.0.0.1} with TTL
-1, and therefore is local network limited. Every host is ought to be member of
-this group, hence the common name ALL-HOSTS. When hosts receives query, replies
-with membership report in random delay up to 10 seconds. No host should send
-a report for this group.
+is IGMPv1 capable router. This query is sent to ALL-HOSTS group with TTL 1, and
+therefore is local network limited. When hosts receives query, it replies with
+a membership report in random delay up to 10 seconds. No host should send
+reports for ALL-HOSTS group, membership there is implicit and mandatory.
 
 Report is sent to the group being reported. As noted above, host does not have
 to report to listen. Filtering multicast traffic is made by other means.
@@ -102,8 +100,6 @@ set of sources hosts on current link want to receive.
 For purpose of this thesis, only IGMPv2 was implemented, as PIM-BIDIR is not
 source specific routing protocol.
 
-\TODO More about backward compatibility?
-
 \section{Link layer}
 
 Even though multicast is specified on network layer, it needs some level of
@@ -134,18 +130,35 @@ are sent there. To enable this behavior NICs often have "all multicast" mode,
 which lets al multicast frames pass through. Or we can put the NIC to
 promiscuous mode, which passes all frames to the operating system.
 
-Receiving all those packets in daemon is another story.
+\subsection{IGMP snooping}
+
+What was written above is true according to specifications, but not much
+reflecting the real state of art. Link layer hardware such as switches often do
+make a difference and use a technique called IGMP snooping. This is described
+in \rfc{4541}. This RFC is only informational, a lot of network hardware with
+this functionality was produced before this RFC and do not behave in any
+standardized way. Network switch performing IGMP snooping understands IGMP and
+listens to router communicating with hosts, and filters multicast traffic on
+the link layer.
+
+At the first glance this seems reasonable, because it stops forwarding packets
+to network segments without any listeners, thus saving bandwidth. On the other
+hand, this high level functionality is expected from network layer, and
+reimplementing it in link layer brings many corner cases, which can prevent
+local multicast from working at all. Usually a combination of network without
+multicast router with IGMP snooping switch can cause unexpected troubles.
 
 \section{Kernel implementation}
 
 Kernel interface for multicast is pretty complicated. At least differences
-between UNIXes are not big. When program wants to receive multicast trafic,
-it opens a socket and sets it up by some setsockopt calls:
+between UNIXes are not big. Let us start with code to receive multicast trafic
+in an ordinary application. It is as simple as opening a socket and setting it
+it up by some setsockopt calls:
 
 \TODO{Example -- code to open socket, set up multicast, join group, ...}
 
 \noindent One thing to note here. When there is socket opened which joined group, the host
-itself joins the group y means of IGMP. And when host is joined, every other
+itself joins the group by means of IGMP. And when host is joined, every other
 multicast enabled socket will get packets addressed to that group. So, you
 still need to filter those at application level.
 
@@ -156,9 +169,9 @@ set should be passed to sockets which orders it by this setsockopt call:
 
 \TODO{Example -- code calling setsockopt IP\_ROUTER\_ALERT}
 
-\noindent There are multiple problems with this. Backward compatibility with IGMPv1 is
-broken, and standard does not force hosts to do so -- and some (e.g. old Cisco)
-routers do not do it.
+\noindent There are multiple problems with this. Backward compatibility with
+IGMPv1 is broken, and standard does not force hosts to do so -- and some (e.g.
+old Cisco) routers do not do it.
 
 To my surprise, there is only one way how to get all IGMP packets coming on
 some interface. That is opening the IGMP control socket.
@@ -177,6 +190,6 @@ explained below. This part could be relatively easily rewritten (at kernel
 side) to some sane netlink api.
 
 But, there is more -- this is the only socket on a host, which receives all
-IGMP packets. So, it is not even theoretically possible to run mmore than one
+IGMP packets. So, it is not even theoretically possible to run more than one
 multicast routing daemon on one system.\footnote{Unless isolating them in
 different network namespaces, more about it later.}
