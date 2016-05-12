@@ -1,15 +1,16 @@
 \chapter{Multicast in IPv4}
 
-IP multicast was added as an additional addressing model. First
+IP multicast was added as an additional addressing model. The first
 references can be found in \rfc{966}. This RFC defines multicast traffic
-with many responsibilities for routers (called "multicast agents" in that time)
-and was soon obsoleted. The latest specification can be found in \rfc{1112}.
+with many responsibilities for routers (called ``multicast agents'' at that time)
+and it was soon obsoleted and served only as an inspiration. The latest
+specification can be found in \rfc{1112}.
 
 In local networks, multicasts are similar to broadcasts. Every packet is to be
-transmitted to every host on that link, and host can decide according to
-destination address whether or not to receive and process or drop it. In other
-words, you need neither a multicast routing capable router nor any special
-network hardware to use multicast in one network.
+transmitted to every host on the same link, and each host can decide according to
+the destination address whether or not it should be processed or alltogether
+dropped. In other words, you need neither a multicast routing capable router
+nor any special network hardware to use multicast in one network.
 
 Differences are notable on internetwork level. While broadcasts should be
 either forwarded to all links or filtered completely by routers, multicasts
@@ -18,17 +19,17 @@ should have more controlled behavior.
 \section{Multicast groups}
 
 The first term we need to understand is the multicast group. It is represented by an IP
-address allocated from dedicated region \prefix{224.0.0.0/4}. It is further
+address allocated from dedicated region \prefix{224.0.0.0/4}. The region is further
 divided into blocks, which have additional semantics. From routing point of
 view, only the Local Network Control Block (\prefix{224.0.0.0/24} is
 interesting. Multicasts in this group must never be forwarded and must never
-cross the boundary of a local network. This block is often used for unicast
-routing protocols communication.
+cross the boundary of a local network. This block is often used by unicast
+routing protocols.
 
 Host membership in a group is fully optional. Neither the number of members in
-a group nor the number of groups host belongs to, is limited and can be even
+a group nor the number of groups a host belongs to is limited and t can be even
 zero. A host does not have to belong to a group to send packets into it.
-Packets are distributed in the same "best effort" manner as unicast ones -- can
+Packets are distributed in the same ``best effort'' manner as unicast ones -- they can
 be delivered to all, some or no hosts, and in any order.
 
 There are three levels of conformance with IP multicast. Level 0 means no
@@ -36,136 +37,143 @@ conformance. Level 1 requires hosts to be able to send packets to multicast
 groups. This level still requires little code in networking stack, because
 sending a packet to a multicast group is very similar to sending it as an unicast
 packet with a destination address set to the group address. While it doesn't make much
-sense to send unicast packets destinated outside local network prefix directly
-to link, it is the expected behavior with multicast.
+sense to send unicast packets destinated outside the local network prefix directly
+to the link, it is the expected behavior with multicast.
 
 Level 2 means fully conformant, able to send and receive multicast traffic.
 
 \section{Internet Group Management Protocol}
 
 As already said, membership in a multicast group is optional. By default, there
-is only one group that every host listens to - named ALL-HOSTS with address
+is only one group that every host listens to --- called \texttt{ALL-HOSTS} with address
 \ip{224.0.0.1}. There must be a way for hosts to express group membership.
-A protocol was set for this purpose and is called IGMP.
+A~protocol exists for this purpose and is called IGMP.
 
-The current version of IGMP is 3 and is described in \rfc{3376}. However, all
-versions are backward compatible. All nodes in one network fall back to the
-least version that all of them support.
+The most recent version of IGMP is 3 and is described in \rfc{3376}. However, all
+versions are backward compatible. Whenever there is a router which only knows
+older version, all the newer ones stop sending any packets and only receive and observe.
 
-The purpose of IGMP is to exchange information between hosts and routers about
-group membership. Note that it is mandatory to implement IGMP to be part of
-a multicast group, but until multicast packet crosses boundaries of one network, it
+The purpose of IGMP is to exchange information about group membership between
+hosts and routers. Note that it is mandatory to implement IGMP to participatein
+a multicast group, but until a multicast packet crosses the boundary of a single network, it
 is delivered as broadcast to all hosts. As such all hosts receive it without
-the routers knowledge.
+the routers being involved.
 
 Let us start with IGMP version 1 specified in Appendix I. of \rfc{1112}. There
-are just two types of messages: membership query and membership report.
-Membership query is sent periodically by routers and announces to hosts there
-is IGMPv1 capable router. This query is sent to ALL-HOSTS group with TTL 1 and
+are just two types of messages: \emph{membership query} and \emph{membership report}.
+Membership query is sent periodically by routers. It announces to hosts that there
+is an IGMPv1 capable router. This query is sent to \texttt{ALL-HOSTS} group with TTL~1 and
 therefore is local network limited. When a host receives a query, it replies with
-a membership report in random delay up to 10 seconds. No host should send
-reports for ALL-HOSTS group, membership there is implicit and mandatory.
+a membership report in 10 seconds with a random delay. No host should send
+reports for the \texttt{ALL-HOSTS} group, membership there is implicit and mandatory.
 
 The report is sent to the group being reported. As noted above, the host does not have
-to send reports to listen. Filtering multicast traffic is made by other means.
+to send reports in order to listen. Filtering multicast traffic is made by other means.
 Sending a report declares there is someone interested in this group on this
 particular link. When, during the random delay, the host receives a report, it
 stops his own timer and remains silent. This reduces the amount of control
 traffic. When the host decides to leave a group, it does nothing. If it was the
-only host in that group, on the next query no one will report and routers will
+only host in that group, on the next query no one will report and the routers will
 stop forwarding.
 
 IGMPv2 \cite{rfc2236} comes with some major changes. First, a router can send
-a query to one specific group. That means it can keep a timer for every group
+a query to a single specific group. That means it can keep a timer for every group
 separately, and asking for reports does not generate unnecessary traffic in
-every other group. Second, the maximum delay between query and report
-(previously fixed 10 seconds) is now specified in each query and is
-configurable. A network administrator can tune this variable for his needs. By
-turning it down, hosts will reply faster and routers can faster stop
+every other group. Second, the maximum delay between a query and the report
+(previously fixed to 10 seconds) is now specified in each query and it is
+configurable. A network administrator can tune this variable for his needs.
+When the value is decreased, hosts will reply faster and routers can faster stop
 forwarding. Giving longer delays can improve stability on very slow or
 unreliable links.
 
-The most notable change though is new message type -- leave group. When a host
-sends a report, it sets a flag. Other hosts without flag remain silent. When
+The most notable change though is a new message type -- \emph{leave group}. When a host
+sends a report, it sets a flag. Other hosts without the flag remain silent. When
 the flagged host leaves a group, it sends the leave group message. Other hosts
-react to other hosts leave in a similar way to query. When router hears leave,
+react to other hosts' leave in a way similar to a query. When a router hears the leave,
 it starts a timer. This timer can be stopped by receiving a report. Expiring this
 timer immediately changes this group state to not having any members. This way
 less unnecessary traffic is forwarded.
 
 IGMPv3 comes with additional fields and more complex protocol logic. It is
-dedicated to source-specific multicast forwarding and includes messages to keep
-set of sources hosts on current link want to receive.
+dedicated to source-specific multicast forwarding and includes messages to manage
+a set of sources for every link. Routers should then forward only traffic from
+these sources onto this link.
 
 For purpose of this thesis, only IGMPv2 was implemented, as PIM-BIDIR is not
-source-specific routing protocol.
+a~source-specific routing protocol.
 
 \section{Link layer}
 
 Even though multicast is specified on the network layer, it needs some level of
-support from link layer. Let me explain how multicast traffic integrates with
-the most common combination of IP over ethernet.
+support from the link layer. Let us explain how multicast traffic integrates with
+the most common combination of IP over Ethernet.
 
-The first problem we need to solve is which MAC address to use for multicast group
-addresses. When sending an unicast packet, ARP is used to determine MAC address.
-As multicast is technically a broadcast on link layer, it would be possible to
+The first problem we need to solve is which MAC address to use for multicast
+group addresses. When sending an unicast packet, mechanism called Address
+Resolution Protocol (\emph{ARP}, \rfc{826}) is used to determine MAC address. It is done
+through simple broadcast questions and answers to construct IP$\rightarrow$MAC mapping.
+
+As the multicast is technically a broadcast on the link layer, it would be possible to
 use the broadcast address \mac{FF:FF:FF:FF:FF:FF}.
-But that would mean every multicast packet on the network must be received by all
-hosts and examined by operating systems because there is no way how to filter
-it on the hardware level. For this purpose, every ethernet address that starts with
-1 (that means, the least significant bit of the first byte) is considered to be
-broadcast address and is to be flooded to all nodes on this network. Network
+But that would mean that every multicast packet on the network must be received by all
+hosts and examined by their operating systems, because there is no way how to filter
+it on the hardware level. For this purpose, every ethernet address with the
+least significant bit of the first byte set is considered to be
+a broadcast address and is to be flooded to all nodes on this network. Network
 hardware generally does not make a difference between them, so we can associate
 specific meaning to different MAC addresses.
 
 For IPv4 multicast, a region of MAC addresses was allocated. This region starts
-at \mac{01:00:5E:00:00:00} and ends with \mac{01:00:5E:7F:FF:FF}. To construct
-MAC address from multicast group address, one puts lower 23 bits of IP address
-to lower bits of the MAC address. This way, network interfaces can implement
-rough filter, that can drop frames host knows nothing about. Additional
-filtering is still needed because of those missing bits.
+at \mac{01:00:5E:00:00:00} and ends with \mac{01:00:5E:7F:FF:FF}. You can see
+that this address space is smaller (only 23 bits) than the multicast IP region
+(28~bits). To construct the MAC address from the multicast group address, one
+puts lower 23 bits of the IP address to the lower bits of the MAC address. This
+way, network interfaces can implement a rough filter, that can drop frames the
+host knows nothing about. Additional filtering is still needed because of those
+missing bits.
 
-Multicast router needs to receive packets for all groups because IGMP reports
-are sent there. To enable this behavior NICs often have "all multicast" mode,
-which lets al multicast frames pass through. Or we can put the NIC into
-promiscuous mode, which passes all frames to the operating system.
+A multicast router needs to receive packets for all groups because IGMP reports
+are sent there. To enable this behavior NICs often have an ``all multicast''
+mode, which lets all multicast frames pass through. This mode is also used when
+the filter table on the NIC is too small to contain all the filters needed. Or
+we can put the NIC into so called promiscuous mode, which passes all frames
+to the operating system.
 
 \subsection{IGMP snooping}
 
-What was written above is true according to specifications, but not much
-reflecting the real state of art. Link layer hardware such as switches often does
-make a difference and use a technique called IGMP snooping. This is described
-in \rfc{4541}. This RFC is only informational, a lot of network hardware with
+What was written above is true according to the specifications, but not really
+reflecting the real state of the art. Link layer hardware such as switches often does
+make a difference and it uses a technique called \emph{IGMP snooping}. This is described
+in \rfc{4541}. This RFC is only informational, beacause a lot of network hardware with
 this functionality was produced before this RFC and do not behave in any
-standardized way. Network switch performing IGMP snooping understands IGMP and
-listens to router communicating with hosts, and filters multicast traffic on
+standardized way. Network switches performing IGMP snooping understand IGMP. They
+listen to routers communicating with hosts and filters multicast traffic on
 the link layer.
 
 At the first glance, this seems reasonable, because it stops forwarding packets
 to network segments without any listeners, thus saving bandwidth. On the other
-hand, this high-level functionality is expected from network layer, and
+hand, this high-level functionality is expected from the network layer, and
 reimplementing it in link layer brings many corner cases, which can prevent
-local multicast from working at all. Usually, a combination of network without
-multicast router with IGMP snooping switch can cause unexpected troubles.
+local multicast from working at all. Usually, a combination of a network having no
+multicast router with an IGMP-snooping switch can cause unexpected troubles.
 
 \section{Kernel implementation}
 
-Kernel interface for multicast is pretty complicated. At least differences
+The system interface for multicast is pretty complicated. At least differences
 between UNIXes are not big. Let us start with code to receive multicast traffic
 in an ordinary application. It is as simple as opening a socket and setting it
 up by some setsockopt calls:
 
 \TODO{Example -- code to open socket, set up multicast, join group, ...}
 
-\noindent One thing to note here. When there is socket opened which joined
-group, the host itself joins the group by means of IGMP. And when host is
-joined, every other multicast-enabled socket will get packets addressed to that
-group. So, you still need to filter those at application level.
+\noindent One thing to note here. When there is a socket opened which joined a group, the host itself joins the group by means of IGMP. And when the host is
+joined, every other multicast-enabled socket will get all packets addressed to that
+group. So, you still need to filter those at the transport level or higher.
 
-When router daemon wants to receive all IGMP packets for all groups, it
+When the router daemon wants to receive all the IGMP packets for all groups, it
 would have to join every group possible. That is certainly not the way to go.
-IGMPv2 suggests using IP option Router Alert. Every IP packet with this option
-set should be passed to sockets which order it by this setsockopt call:
+IGMPv2 suggests using the IP option \emph{Router Alert}. Every IP packet with this option
+set should be passed to all sockets that order it by this setsockopt call:
 
 \TODO{Example -- code calling setsockopt IP\_ROUTER\_ALERT}
 

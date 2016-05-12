@@ -4,51 +4,51 @@
 % short intro to uni/broad/multicast
 
 There are multiple ways how to use a computer network to communicate between two
-or more machines. In the most common technology, based on Internet Protocol
-(IP), one can send a message (called packet) from one machine, destined to
-another one. That is usually called unicast and is by far the most well-known
+or more machines. In the most common technology, based on the Internet Protocol
+(IP), one can send a message (called a packet) from one machine, directed to
+another one. That is usually called a \emph{unicast} and is by far the most well-known
 method. Or one can send a packet to all machines in some network -- that is
-called broadcast. However, there are applications where both of these
+called a \emph{broadcast}. However, there are applications where both of these
 are suboptimal. A good example can be conference telephony, games or video
 streaming.
 
-When public television company broadcasts final match at Olympic games, it can
+When a public television company broadcasts the final match of Olympic games, it can
 have millions of receivers. The company does not want to send every packet in
 millions of copies by unicast. However, it does not want to flood every
-computer connected to The Internet by broadcast either. That is why multicast have
-been invented. Multicast is a general way how to transmit traffic from group of
-sources to group of listeners.
+computer connected to the Internet by broadcast either. That is why \emph{multicast} has
+been invented. Multicast is a general way how to transmit traffic from a group of
+senders to a group of receivers.
 
 In order to deliver packets between networks, the network itself has to do some
-computations. One of them is routing -- collaboratively finding optimal path
-for packet, for some definition of optimal.
-World of unicast routing is well inhabited. There are lots of unicast routing
-protocols with completely different approaches. When it comes to routing
-multicast, much is different.
+computations. One of them is routing -- collaboratively finding an optimal path
+for a packet, for some definition of optimal.
+The world of unicast routing is well inhabited. There are lots of unicast routing
+protocols based on completely different approaches. When it comes to routing
+multicasts, much is different.
 
 Multicast itself was added as an extension to IPv4 and requires special
-handling in network hardware. When just one router on a way does not support
+handling in network hardware. When just one router on the way does not support
 it, multicast will not work. As such it suffered from a lack of support for a long
 time. And because this support was often broken, it is still not widely used.
 
 Supporting multicast on the side of the receiver is easy, and one can receive
 multicast in all current major operating systems. For example in UNIXes, it is
-a matter of few syscalls. But routing multicast traffic is a different thing
+a matter of a few syscalls. But routing multicast traffic is a different thing
 -- one needs to run a routing daemon that communicates with hosts and other
 routers, speaks at least two different network protocols and controls the
 kernel's routing tables. There already are such daemons that are traditionally
-used: e.g. mrouted and pimd.
+used: \texttt{mrouted} and \texttt{pimd}.
 
-The purpose of this thesis is to explain how multicast works, introduce the reader to a world of multicast routing and implement one of existing multicast routing
+The purpose of this thesis is to explain how multicast works, introduce the reader to the world of multicast routing and implement one of existing multicast routing
 protocols. It would make no sense to implement another standalone routing
 daemon.
 
 There once was a student project, that grew to worldwide usage -- The BIRD
 internet routing daemon. It currently supports a handful of unicast routing
-protocols at a time. There are use-cases in which having closer communication
-between unicast and multicast routing can be advantage. Let the primary goal of
+protocols, that can run at the same time. There are use-cases in which having closer communication
+between unicast and multicast routing can be an advantage. Let the primary goal of
 this thesis be to teach BIRD multicast routing.
 
-The protocol chosen for this thesis is PIM-BIDIR. It is somehow simplified
+The protocol chosen for this thesis is PIM-BIDIR. It is a somehow simplified
 protocol from the PIM family because it doesn't need to hold state information
 based on traffic source. That makes it less demanding on network hardware.
