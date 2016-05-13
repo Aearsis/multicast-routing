@@ -51,10 +51,16 @@ PIM, DR joins $G$ on its upstream. Let us clear the notation for joins and prune
     tree is used for groups without their own state.
 \end{itemize}
 
-\TODO{Image with RP tree built}
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=1.00]{/home/ohlavaty/mff/baka/img/rp-tree.pdf}
+\caption{Example RP tree}
+\label{rp-tree}
+\end{figure}
 
 Let me first explain briefly how PIM Sparse Mode works. Suppose there is
 already a RP tree built for group $G$, with some receivers that joined~$(*,G)$.
+One such network can be seen on the figure \ref{rp-tree}.
 Suddenly node $S$ starts sending multicast packets on a link. Then DR on
 this link ($A$, also called first-hop router) takes these packets and
 encapsulates them into ordinary unicast packets -- PIM Register messages. These
@@ -67,6 +73,10 @@ distributes them downstream. Routers are responsible for picking packets coming
 on upstream and forwarding them down on links where they are acting as
 designated routers according to the shared tree for $G$.
 
+In the example, traffic between $S$ and $R$ flows from $S$ to $A$, then
+encapsulated in register messages over $B$ to $RP$, then as multicast over $C$
+and $D$ to $R$.
+
 In the meantime, RP initiates Join for $(S, G)$, which creates distribution
 tree for $G$ rooted at $S$. After all routers in between $A$ and RP joins the
 source tree, packets will be forwarded from $A$ to RP naturally. At that time
@@ -75,12 +85,19 @@ $A$. Encapsulating is then stopped and the traffic will flow as usual. So, now
 the traffic follows the $(S,G)$ tree from $S$ to the RP, then the $(*,G)$ tree
 down to all receivers.
 
-\TODO{The same tree with (S,G) tree over}
+\begin{figure}[htp]
+\centering
+\includegraphics[scale=1.00]{/home/ohlavaty/mff/baka/img/source-tree.pdf}
+\caption{The same network with (S, G) tree}
+\label{sg-tree}
+\end{figure}
 
 Eventually, for a receiver $R$, DR on $R$'s link will send a $(S, G)$ join.
 This join will propagate towards $S$ until reaching first router with $(S,G)$
 state. It that time the receiver joins the source specific tree for $(S,G)$ and
-packets use the shortest path from $S$ to $R$.
+packets use the shortest path from $S$ to $R$. The situation is then similar to
+the figure \ref{sg-tree}. Traffic uses the shortcut and flows as multicast
+directly from $S$ over $E$ and $F$ to $R$.
 
 PIM Sparse Mode and PIM Dense Mode differ in their default downstream behavior.
 While PIM-SM requires receivers to explicitly join, PIM-DM floods everything
@@ -134,14 +151,23 @@ with a Backoff message. It instructs target router to wait a while until
 unicast routing stabilizes. After a short period without other Offers, winner
 passes DF role in Pass message.
 
-\TODO{Pathological situations}
+In the ideal conditions, there would be exactly one DF on every link. There are
+situations, where no DF is elected, for example when all paths to the RPL are
+lost. Then every node advertises infinite metric, and no router is elected
+winner. Also, when the DF fails silently, other nodes know only after few
+missing hello messages. For the period in between no router is the DF.
+
+Much worse would be if there were two DF's on a link. The election protocol
+is biased to the safe side. For instance, old DF sending a Pass immediately
+stops being DF, even if all Pass messages were to be lost. Even when they are
+delivered, there is a short period without any router forwarding.
 
 \subsection{Packet forwarding}
 
 Suppose source $S$ starts transmitting packets on its link $L_0$. Then
 currently acting DF will forward them immediately to its upstream link $L_1$.
 DF on $L_1$ forwards it to its upstream, $L_2$, and so on. This is repeated
-until the packet reaches RPL. As there is no DF on RPL, forwarding up stops
+until the packet reaches RPL. As there is no DF on the RPL, forwarding upstream stops
 there.
 
 Simultaneously, all routers listen for packets on their upstream links, and
@@ -152,3 +178,8 @@ forwarding needs to be done even when there are no listeners.
 
 You can see that every DF can forward packets for one group upstream and
 downstream at the same time, explaining the name "Bidirectional".
+
+As opposed to other PIM modes, there is no need to encapsulate packets, thus
+there is no different behavior on the first-hop router. Also, RPA does not have
+to be assigned to any router. This means every router behaves the same no
+matter where in the tree it is, simplyfing the overall protocol design.
