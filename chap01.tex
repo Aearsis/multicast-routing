@@ -157,12 +157,13 @@ reimplementing it in link layer brings many corner cases, which can prevent
 local multicast from working at all. Usually, a combination of a network having no
 multicast router with an IGMP-snooping switch can cause unexpected troubles.
 
+\def\setsockopt{\texttt{setsockopt} }
 \section{Kernel implementation}
 
 The system interface for multicast is pretty complicated. At least differences
 between UNIXes are not big. Let us start with code to receive multicast traffic
 in an ordinary application. It is as simple as opening a socket and setting it
-up by some setsockopt calls:
+up by some \setsockopt calls:
 
 \TODO{Example -- code to open socket, set up multicast, join group, ...}
 
@@ -173,31 +174,82 @@ group. So, you still need to filter those at the transport level or higher.
 When the router daemon wants to receive all the IGMP packets for all groups, it
 would have to join every group possible. That is certainly not the way to go.
 IGMPv2 suggests using the IP option \emph{Router Alert}. Every IP packet with this option
-set should be passed to all sockets that order it by this setsockopt call:
+set should be passed to all sockets that order it by this \setsockopt call:
 
-\TODO{Example -- code calling setsockopt IP\_ROUTER\_ALERT}
+\TODO{Example -- code calling \setsockopt IP\_ROUTER\_ALERT}
 
 \noindent There are multiple problems with this. Backward compatibility with
-IGMPv1 is broken, and standard does not force hosts to do so -- and some (e.g.
+IGMPv1 is broken, and standard does not force hosts to set the option. Some (e.g.
 old Cisco) routers do not do it.
 
 To my surprise, there is only one way how to get all IGMP packets coming on
 some interface. That is opening the IGMP control socket.
 
-\subsection{IGMP control socket}
+\subsection{Multicast kernel interface}
 
 When we want to control kernel multicast routing tables, we need to open
-control socket. That is raw IP socket with type \texttt{IPPROTO\_IGMP}. Then,
-sequence of setsockopt calls is needed:
+a control socket. That is a raw IP socket with a type \texttt{IPPROTO\_IGMP}.
+Then, a~sequence of \setsockopt calls is needed:
 
 \TODO{Example -- socket, MRT\_INIT, MRT\_PIM}
 
-There can be only one socket on which MRT\_INIT succeeds. This is the one
-control socket, through which we can control multicast routing tables in a way
-explained below. This part could be relatively easily rewritten (at kernel
-side) to some sane netlink API.
+\texttt{Setsockopt} calls related to the multicast have option names starting
+with \texttt{MRT\_}. These constants are defined in \texttt{<linux/mroute.h>}.
+Because they are essentialy a function calls, allow us to say ``call
+\texttt{MRT\_INIT}'' with the meaning of calling \setsockopt with the option
+name \texttt{MRT\_INIT}.
 
-But, there is more -- this is the only socket on a host, which receives all
-IGMP packets. So, it is not even theoretically possible to run more than one
-multicast routing daemon on one system.\footnote{Unless isolating them in
-different network namespaces, more about it later.}
+There can be only one socket on which the call MRT\_INIT succeeds. That socket
+is stored in the kernel and is used for multiple purposes. By issuing another
+\setsockopt calls, one can control multicast routing tables. What is not well
+documented is that this is the only socket on a host which can receive all IGMP
+packets. Because of this limitation, it is not possible to run more than one
+multicast routing daemon.
+
+Let us have a look on how to control the multicast routing. As the first thing
+we need to add \emph{virtual interfaces} (VIFs). VIF can be built on top of
+a~real network device, an IPIP tunnel or it can create a special purpose device.
+Multicast routing table entries operate only on subsets of VIFs.
+
+There can be only a very limited number of VIFS. This number is currently
+controlled by kernel compile time constant MAXVIFS, which is 32. It is not easy
+to change it, because it breaks the kernel ABI. Every VIF has an index from the
+range $0\dots31$. To add a VIF, we must fill \texttt{struct vifctl} and call
+\texttt{MRT\_ADD\_VIF}:
+
+\begin{lstlisting}[language=c]
+struct vifctl vc = { 0 };
+vc.vifc_vifi = 1;
+vc.vifc_flags = VIFF_USE_IFINDEX;
+vc.vifc_lcl_ifindex = 2;
+
+setsockopt(igmp_sock, IPPROTO_IP, MRT_ADD_VIF, &vc, sizeof(vc));
+\end{lstlisting}
+
+We create a VIF representing real network interface with index 2. This VIF will
+get assigned index 1. We can use an interface address to target a real
+interface instead of interface index, or specify destination address for the
+IPIP tunnel. If we set the VIFF\_REGISTER flag, special device will be created.
+
+Kernel does not provide regular routing tables. The structure used for
+forwarding is called Multicast Forwarding Cache (MFC). MFC entry can be added
+by filling a \texttt{struct mfcctl} and calling \texttt{MRT\_ADD\_MFC} or
+\texttt{MRT\_ADD\_MFC\_PROXY}. The difference between these two will be
+explained later.
+
+\TODO{Example of mfcctl.}
+
+The basic meaning of mfc entry is hidden in the field \texttt{mfcc\_ttls}. It is
+an array of MAXVIFS integers, indexed by VIF index. Whenever a field for VIF is
+either 0 or 255, we call the VIF inactive for this entry, otherwise we call it
+active.
+
+The entries are indexed by source and group address. When a packet for $(S,G)$
+arrives on any interface, it is first checked whether it came from the
+interface \texttt{mfcc\_parent}. If not, it is dropped immediately. Otherwise
+for every active VIF $i$ the packet's TTL is compared to the threshold in
+\texttt{mfcc\_ttls[$i$]}. If the packet's TTL is greater, it is copied to the
+VIF~$i$.
+
+In Linux, there are two more types of MFC entries: $(*, G)$ and $(*,*)$.
+\TODO{Find out how they were meant.}
