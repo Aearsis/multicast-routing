@@ -45,6 +45,7 @@
 \usepackage{paralist}       % improved enumerate and itemize
 \usepackage[usenames]{xcolor}  % typesetting in color
 \usepackage{listings}
+\usepackage{enumitem}
 
 \definecolor{gray}{rgb}{0.5,0.5,0.5}
 \lstset{ %
@@ -120,6 +121,10 @@ information. Multicast routing kernel interface is complicated and archaic. }
 % Definitions of macros (see description inside)
 \include{macros}
 
+% Set parskip to make short paragraphs a prettier
+\parskip = \baselineskip
+\divide \parskip by 4
+
 % Title page and various mandatory informational pages
 \begin{document}
 \include{title}
@@ -133,6 +138,7 @@ information. Multicast routing kernel interface is complicated and archaic. }
 \include{chap01}
 \include{chap02}
 \include{chap03}
+\include{chap04}
 
 \include{epilog}
 

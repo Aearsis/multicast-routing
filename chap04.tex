@@ -1,0 +1,139 @@
+\chapter{Multicast in the BIRD}
+
+We have added three protocols into BIRD: The IGMP, PIM and kernel multicast
+abstraction layer (mkernel). Let us go through them and look at their architecture and configuration.
+
+\section{The IGMP}
+
+Implementation of IGMP is pretty straightforward. It resides in
+\texttt{/proto/igmp/} and is split into three files: \texttt{igmp.h},
+\texttt{igmp.c} and \texttt{packets.c}.
+
+In the last one we can find a packet processing code. As there are only two
+packet types in IGMPv2, this code looks simpler than similar code in other
+protocols. Because there can be only one IGMP control socket which receives all
+the packets, we have decided to open the control sockte in the mkernel protocol
+and emulate packet receiving for IGMP instances.
+
+Because IGMP needs to send packets themselves, we decided to dedicate a special
+type of bird sockets for them -- \texttt{SK\_IGMP}. When a protocols opens
+a socket of this type, an actual raw IP socket with protocol
+\texttt{IPPROTO\_IGMP} is opened under the hood. But this socket is used for
+sending packets only, its read buffer is not allocated and the socket itself is
+not added to the main IO loop. Instead, depending on whether it is specific to
+one interface or not, it is added (``registered'') to one of the internal lists
+in the mkernel protocol. Mkernel has its IGMP control socket opened, and calls
+\texttt{rx\_hook} for every registered socket. It temporarily substitutes these
+protocols' read buffer with the shared one to avoid copying the packet data, so
+read hooks should not modify the packet.
+
+As in IGMPv2 every packet consists of a common header only, a simple
+\texttt{struct igmp\_pkt} is fitted onto the received data and read. Similarly,
+when sending a packet, this structure is filled and sent as bytes.
+
+The IGMP instance keeps a state structure \texttt{struct igmp\_iface} for every
+interface known. For each it opens a socket specific for this device and keeps
+the state machine with all the timers. This state machine ensures there is only
+one querying router on every interface. Next, there is a hash table of joined
+groups.
+
+There are four states for every group according to the standard. One of them,
+``no members'' is implicit by not having any state information for this group.
+An existing group state for a group with no members may exist only temporarily.
+In the other states, \texttt{struct igmp\_grp} exists for such group with all
+the timers needed. Internal state changes do not affect routing.
+
+The IGMP produces a ``multicast requests'' -- tuples of $(S, G, I)$ with the
+meaning that there is a host which joined $(S, G)$ on interface $I$. These
+requests are stored in a table common for multiple protocols. This way
+protocols communicate, and it allows us to provide a PIM implementation
+independent on the IGMP, and vice versa.
+
+These tables are just a special kind of routing tables. This matches the
+paradigm of the BIRD made of routing tables and protocols, and comes with
+surprising benefits. These tables use a special type of network as a key, the
+tuple mentioned earlier. When a ``route'' exists for a group, then there is
+a need to forward traffic to the interface.
+
+One of those benefits is that you can set these requests statically by a known
+mechanism, specifying a static route. Or, you can decide to filter out a group
+completely by using route filters. You can have more request tables and run
+independent instances of the IGMP connected to different multicast routing
+protocols. Or, when it does make sense, you can even use the BIRD to manage one
+group with different routing protocols on different interfaces.
+
+\subsection{Configuration}
+
+Configurable variables have the same names as in the IGMP standard, \rfc{2246}.
+Intervals are specified by time expressions to avoid unit problems. Have a look
+on a configuration example:
+
+\begin{lstlisting}
+protocol igmp {
+	interface "eth*" {
+	  robustness 2;
+	  query interval 125 s;
+	  query response interval 10 s;
+	  startup query count 2;
+	  startup query interval 31 s;
+	  last member query count 2;
+	  last member query interval 1 s;
+	};
+	mreq4 { import all; };
+}
+\end{lstlisting}
+
+All configuration variables are interface-specific. Let us go through their meaning:
+
+\begin{description}[style=nextline]
+\item[Robustness $k$]
+  Loss of less than $k$ packets cannot cause protocol to have inconsistent
+  states. Increasing $k$ will increase stability on lossy links, but groups
+  will be left slower.
+
+  Default value: 2
+
+\item[Query interval $t$]
+  A general query will be sent once per $t$. Decreasing $t$ will cause more
+  control traffic, but faster convergence on lossy links.
+
+  Default value: 125 seconds
+
+\item[Query response interval $t$]
+  Hosts have to send their report until $t$ passes. Larger values spread the
+  burst of control traffic after a general query.
+
+  Default value: 10 seconds
+
+\item[Startup query count $c$, startup query interval $t$]
+  When starting up, a loss of a query is critical, because it causes undetected
+  delay before starting to froward traffic. First $c$ queries are sent in
+  shorter interval $t$.
+
+  Default values: 2 messages, 31 seconds
+
+\item[Last member query count $c$, last member query interval $t$]
+  After receiving a leave, $c$ group specific queries are sent to the group,
+  once per $t$. After $c\cdot t$, router assumes there are no group members.
+  Decreasing these will cause groups to be left faster.
+
+  Default values: 2 messages, 1 second
+
+\end{description}
+
+There is also an implicit channel configuration for the multicast request
+table. IGMP instance can have only one channel of type \texttt{mreq4}
+configured.
+
+The default values are well suited for the majority of use cases, but you still
+need to include the IGMP configuraton section for IGMP to run. Do it so
+whenever a router is connected to a link with local hosts.
+
+\section{PIM}
+\TODO{Rtable - optimal announces make matters simple}
+
+
+\TODO{Subsecond precision timers}
+
+\TODO{Netlab}
+
