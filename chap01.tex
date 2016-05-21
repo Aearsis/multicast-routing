@@ -154,10 +154,16 @@ At the first glance, this seems reasonable, because it stops forwarding packets
 to network segments without any listeners, thus saving bandwidth. On the other
 hand, this high-level functionality is expected from the network layer, and
 reimplementing it in link layer brings many corner cases, which can prevent
-local multicast from working at all. Usually, a combination of a network having no
-multicast router with an IGMP-snooping switch can cause unexpected troubles.
+local multicast from working at all. Especially when connecting two multicast
+routers with a bridge, you must disable IGMP snooping, because it will filter
+out all traffic for which the router is not a local host -- most probably
+everything you want to route.
 
-\def\setsockopt{\texttt{setsockopt} }
+For instance, Linux virtual bridges have IGMP snooping turned on by default.
+You can check its status and configure it through special files located in
+\texttt{/sys/devices/virtual/{\it netdev\/}/bridge/}.
+
+\def\setsockopt{\texttt{set\-sock\-opt} }
 \section{Kernel implementation}
 
 The system interface for multicast is pretty complicated. At least differences
@@ -189,11 +195,16 @@ some interface. That is opening the IGMP control socket.
 
 When we want to control kernel multicast routing tables, we need to open
 a control socket. That is a raw IP socket with a type \texttt{IPPROTO\_IGMP}.
-Then, a~sequence of \setsockopt calls is needed:
+Then, a~\setsockopt call is needed:
 
-\TODO{Example -- socket, MRT\_INIT, MRT\_PIM}
+\begin{lstlisting}[language=c]
+int fd = socket(AF_INET, SOCK_RAW, IPPROTO_IGMP);
 
-\texttt{Setsockopt} calls related to the multicast have option names starting
+int v = 1;
+setsockopt(fd, IPPROTO_IP, MRT_INIT, &v, sizeof(v));
+\end{lstlisting}
+
+Syscalls \texttt{setsockopt} related to the multicast have option names starting
 with \texttt{MRT\_}. These constants are defined in \texttt{<linux/mroute.h>}.
 Because they are essentialy a function calls, allow us to say ``call
 \texttt{MRT\_INIT}'' with the meaning of calling \setsockopt with the option
@@ -237,7 +248,18 @@ by filling a \texttt{struct mfcctl} and calling \texttt{MRT\_ADD\_MFC} or
 \texttt{MRT\_ADD\_MFC\_PROXY}. The difference between these two will be
 explained later.
 
-\TODO{Example of mfcctl.}
+\begin{lstlisting}[language=c]
+struct mfcctl mc = { 0 };
+
+mc.mfcc_origin = in_source;
+mc.mfcc_mcastgrp = in_group;
+mc.mfcc_parent = vifi;
+
+for (int i = 0; i < MAXVIFS; i++)
+    mc.mfcc_ttls[i] = ttl_threshold[i];
+
+setsockopt(igmp_sock, IPPROTO_IP, MRT_ADD_MFC, &mc, sizeof(mc));
+\end{lstlisting}
 
 The basic meaning of mfc entry is hidden in the field \texttt{mfcc\_ttls}. It is
 an array of MAXVIFS integers, indexed by VIF index. Whenever a field for VIF is
@@ -251,5 +273,35 @@ for every active VIF $i$ the packet's TTL is compared to the threshold in
 \texttt{mfcc\_ttls[$i$]}. If the packet's TTL is greater, it is copied to the
 VIF~$i$.
 
-In Linux, there are two more types of MFC entries: $(*, G)$ and $(*,*)$.
-\TODO{Find out how they were meant.}
+In Linux, there are two more types of MFC entries: $(*,G)$ and $(*,*)$. These
+are added by a call \texttt{MFC\_ADD\_MFC\_PROXY}, and have completely different
+meaning. I haven't found any explanation for these, my assumptions are based on
+studying the kernel source code. The proxy entries are used to build a shared
+tree ,possibly statically, common for all groups. First, you have to choose one
+uplink interface $i$, and add a $(*,*)$ entry with a \texttt{mfcc\_parent} set
+to $i$. Whenever a packet comes to an active interface, and no $(*, G)$ MFC
+entry is present yet, it is forwarded to the uplink.
+
+For a simple example, imagine your home router. It probably has three
+interfaces: the uplink \texttt{wan}, wired \texttt{lan} and wireless
+\texttt{wlan} downlinks\footnote{Those two downlinks are probably internally
+bridged in your router, but not in this example.}. A $(*,*)$ entry with
+\texttt{wan} and \texttt{lan} as active interfaces would enable you to send
+multicast packets from hosts on \texttt{lan}, which would then be forwarded to
+\texttt{wan}. Multicast packets sent on \texttt{wlan} would be dropped.
+
+Then, you can specify some $(*,G)$ entries. Having a $(*,G)$ entry with parent
+$p$, when a packet comes on an interface $j$, and there is a $(*,*)$ entry with
+both $p$ and $j$ active, the packet is forwarded to all interfaces active in
+the $(*,G)$ entry with the exception of $j$. Following the previous example,
+you would add an $(*,G)$ entry with all three interfaces active for a group
+that you want to be delivered to both of your links. Any multicast packet
+received on either \texttt{wan} or \texttt{lan} would be forwarded to the
+remaining interfaces.
+
+Note that even when a $(*,G)$ entry is present, the kernel looks for a $(*,*)$
+entry to filter the incoming interface. There can be more $(*,*)$ entries with
+different uplinks, but it will work only when the active interfaces are
+disjunct. There are no checks to prevent you from adding an entry that would
+never be found, so it is hard to guess which behavior is intentional and which
+is not.

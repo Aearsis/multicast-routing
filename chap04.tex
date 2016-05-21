@@ -6,8 +6,8 @@ abstraction layer (mkernel). Let us go through them and look at their architectu
 \section{The IGMP}
 
 Implementation of IGMP is pretty straightforward. It resides in
-\texttt{/proto/igmp/} and is split into three files: \texttt{igmp.h},
-\texttt{igmp.c} and \texttt{packets.c}.
+\ttt{/proto/igmp/} and is split into three files: \ttt{igmp.h},
+\ttt{igmp.c} and \ttt{packets.c}.
 
 In the last one we can find a packet processing code. As there are only two
 packet types in IGMPv2, this code looks simpler than similar code in other
@@ -16,22 +16,22 @@ the packets, we have decided to open the control sockte in the mkernel protocol
 and emulate packet receiving for IGMP instances.
 
 Because IGMP needs to send packets themselves, we decided to dedicate a special
-type of bird sockets for them -- \texttt{SK\_IGMP}. When a protocols opens
+type of bird sockets for them -- \ttt{SK\_IGMP}. When a protocols opens
 a socket of this type, an actual raw IP socket with protocol
-\texttt{IPPROTO\_IGMP} is opened under the hood. But this socket is used for
+\ttt{IPPROTO\_IGMP} is opened under the hood. But this socket is used for
 sending packets only, its read buffer is not allocated and the socket itself is
 not added to the main IO loop. Instead, depending on whether it is specific to
 one interface or not, it is added (``registered'') to one of the internal lists
 in the mkernel protocol. Mkernel has its IGMP control socket opened, and calls
-\texttt{rx\_hook} for every registered socket. It temporarily substitutes these
+\ttt{rx\_hook} for every registered socket. It temporarily substitutes these
 protocols' read buffer with the shared one to avoid copying the packet data, so
 read hooks should not modify the packet.
 
 As in IGMPv2 every packet consists of a common header only, a simple
-\texttt{struct igmp\_pkt} is fitted onto the received data and read. Similarly,
+\ttt{struct igmp\_pkt} is fitted onto the received data and read. Similarly,
 when sending a packet, this structure is filled and sent as bytes.
 
-The IGMP instance keeps a state structure \texttt{struct igmp\_iface} for every
+The IGMP instance keeps a state structure \ttt{struct igmp\_iface} for every
 interface known. For each it opens a socket specific for this device and keeps
 the state machine with all the timers. This state machine ensures there is only
 one querying router on every interface. Next, there is a hash table of joined
@@ -40,7 +40,7 @@ groups.
 There are four states for every group according to the standard. One of them,
 ``no members'' is implicit by not having any state information for this group.
 An existing group state for a group with no members may exist only temporarily.
-In the other states, \texttt{struct igmp\_grp} exists for such group with all
+In the other states, \ttt{struct igmp\_grp} exists for such group with all
 the timers needed. Internal state changes do not affect routing.
 
 The IGMP produces a ``multicast requests'' -- tuples of $(S, G, I)$ with the
@@ -51,89 +51,220 @@ independent on the IGMP, and vice versa.
 
 These tables are just a special kind of routing tables. This matches the
 paradigm of the BIRD made of routing tables and protocols, and comes with
-surprising benefits. These tables use a special type of network as a key, the
-tuple mentioned earlier. When a ``route'' exists for a group, then there is
-a need to forward traffic to the interface.
+surprising benefits. For this purpose, internal routing tables were generalized
+to use \ttt{struct net\_addr} as a key. This structure can be inherited and
+its methods adapted -- as in case of \ttt{net\_addr\_mreq}. While the most
+used \ttt{net\_addr} stores a network prefix (hence its name),
+\ttt{net\_addr\_mreq} stores group address and interface. When a ``route''
+exists for $(G, I)$, then the routing protocol should deliver the traffic for
+$G$ to the interface $I$. These multicast requests do not have their kernel
+counterpart.
 
-One of those benefits is that you can set these requests statically by a known
-mechanism, specifying a static route. Or, you can decide to filter out a group
-completely by using route filters. You can have more request tables and run
+One of the benefits of having this information in routing table is that you can
+reuse BIRDs powerful mechanisms to mangle with routes. You can for example set
+these request statically by adding a static route. Or you can filter out one
+specific group using route filters. You can have more request tables and run
 independent instances of the IGMP connected to different multicast routing
 protocols. Or, when it does make sense, you can even use the BIRD to manage one
 group with different routing protocols on different interfaces.
 
-\subsection{Configuration}
+\section{The PIM}
 
-Configurable variables have the same names as in the IGMP standard, \rfc{2246}.
-Intervals are specified by time expressions to avoid unit problems. Have a look
-on a configuration example:
+As already said, we have implemented only one multicast routing protocol to the
+BIRD, that is PIM in its Bidirectional variant. This variant is simpler than
+the others, but still needs to hold a lot of state in a way different to
+unicast routing protocols. Because of that, a great portion of PIM code only
+manages its internal state. Despite implementing only this variant, we have
+thought of other PIM variants and the internal structure is as
+future-compatible as possible.
 
-\begin{lstlisting}
-protocol igmp {
-	interface "eth*" {
-	  robustness 2;
-	  query interval 125 s;
-	  query response interval 10 s;
-	  startup query count 2;
-	  startup query interval 31 s;
-	  last member query count 2;
-	  last member query interval 1 s;
-	};
-	mreq4 { import all; };
-}
-\end{lstlisting}
-
-All configuration variables are interface-specific. Let us go through their meaning:
+You can find the PIM implementation in \ttt{/proto/pim/}. It is split into four
+parts: \ttt{pim.c}, \ttt{pim.h}, \ttt{packets.c} and \ttt{df.c}. Let us first
+look at the header file. There are lots of structure definitions for holding
+the internal state.
 
 \begin{description}[style=nextline]
-\item[Robustness $k$]
-  Loss of less than $k$ packets cannot cause protocol to have inconsistent
-  states. Increasing $k$ will increase stability on lossy links, but groups
-  will be left slower.
+\item[\ttt{pim\_proto}]
+  Is the instance of the protocol.
 
-  Default value: 2
+\item[\ttt{pim\_iface}]
+  For every interfece PIM knows, we need to open a socket. Information needed
+  to send hello packets is stored here. These are stored in a list
+  \ttt{pim\_proto->ifaces}. Even the kernel keeps all interfaces in a list, so
+  this should be safe and fast enough. Moreover, in every socket there is
+  a pointer to this structure, so we do not need to traverse the list on every
+  packet received.
 
-\item[Query interval $t$]
-  A general query will be sent once per $t$. Decreasing $t$ will cause more
-  control traffic, but faster convergence on lossy links.
+\item[\ttt{pim\_rp}]
+  Keeps the shared tree information. All instances of this structure are stored
+  in \ttt{pim\_proto->rp\_states}, which is a hash table indexed by RPA. The
+  protocol design assumes a lot of groups share a RP, so there should be only
+  a few of these. There is no way how to abandon a RP tree, so this state is
+  never deleted.
 
-  Default value: 125 seconds
+  RP state caches its upstream and metric towards RP, so we do not have to
+  search in MRIB often.
 
-\item[Query response interval $t$]
-  Hosts have to send their report until $t$ passes. Larger values spread the
-  burst of control traffic after a general query.
+\item[\ttt{pim\_rp\_iface}]
+  For every shared RP tree and every interface there is a DF elected, so we
+  keep an instance for every member of cartesian product of \ttt{pim\_iface} and
+  \ttt{pim\_rp}. All of them are stored in a hash table in \ttt{pim\_proto},
+  because the DF election is bursty and fast, and we want to find these state
+  structures quickly.
 
-  Default value: 10 seconds
+\item[\ttt{pim\_grp}, \ttt{pim\_grp\_iface}]
+  The PIM join/prune mechanism maintains a group state over the RP tree. We
+  need to remember which downstream branches have joined, and keep a timer to
+  join upstream. We keep the upstream state (\ttt{pim\_grp}) only when we're
+  joined upstream, and the downstream state  (\ttt{pim\_grp\_iface}) only when
+  there's a joined router downstream.
 
-\item[Startup query count $c$, startup query interval $t$]
-  When starting up, a loss of a query is critical, because it causes undetected
-  delay before starting to froward traffic. First $c$ queries are sent in
-  shorter interval $t$.
+  The \ttt{pim\_grp} instances are kept in hash in \ttt{pim\_proto}, but the
+  downstream states are kept in a list inside the upstream state. Iterating
+  over this list must be cheap anyway, because we need to forward every single
+  packet to all these interfaces (collectively).
 
-  Default values: 2 messages, 31 seconds
-
-\item[Last member query count $c$, last member query interval $t$]
-  After receiving a leave, $c$ group specific queries are sent to the group,
-  once per $t$. After $c\cdot t$, router assumes there are no group members.
-  Decreasing these will cause groups to be left faster.
-
-  Default values: 2 messages, 1 second
+\item[\ttt{pim\_neigh}]
+  We maintain a direct-neighbor cache. For every neighbor, we need to remember
+  the flags it announced in its hello message, and its generation identifier.
 
 \end{description}
 
-There is also an implicit channel configuration for the multicast request
-table. IGMP instance can have only one channel of type \texttt{mreq4}
-configured.
+\noindent Other structures are either too trivial to explain or just temporary
+to share information among PIM compile units.
 
-The default values are well suited for the majority of use cases, but you still
-need to include the IGMP configuraton section for IGMP to run. Do it so
-whenever a router is connected to a link with local hosts.
+The PIM itself is split into three logical units, which share a common state.
+The join/prune mechanism, the DF election mechanism and the forwarding logic.
 
-\section{PIM}
-\TODO{Rtable - optimal announces make matters simple}
+\subsection{The join/prune mechanism}
+When the routers distribute traffic over the RP tree, they need to know which
+branches do have receivers for a group $G$. The JP mechanism is connected to
+the multicast requests table, and uses the channel in both ways. Everything
+starts, when a hosts joins a group by sending an IGMP membership report. First
+hop router notes it, and adds an entry to the request table. From there it is
+propagated to the JP mechanism of an active PIM instance.
 
+As it is the first join for a group $G$, the \ttt{pim\_grp} structure for $G$ is
+created. Existance of the upstream state results in sending a Join to the
+\emph{upstream neighbor} - the Designated Forwarder on the upstream interface.
+When the upstream neighbor receives a join on downstream, it creates the
+downstream state, where it keeps an expiry timer. Then it adds an entry to the
+multicast request table. The entry is then, being a route, announced back to
+the PIM. Because the PIM does not make a difference between different multicast
+requests, it is essentialy the same situation as on the downstream router.
 
-\TODO{Subsecond precision timers}
+This way the mechanism is split into two layers -- downstream, receiving PIM
+joins, and upstream, propagating any joins to the upstream neighbor. Of course,
+looping the simple request through the BIRDs routing tables introduces a small
+delay, but you can alter its behavior using filters.
 
-\TODO{Netlab}
+The main domain of the BIRD is its ability to run multiple routing protocols at
+the same time. While routing an unicast packet through multiple autonomous
+systems with different routing protocols is possible, well defined and widely
+used, it's not so easy with multicast. One way how to make it work is through
+this request sharing.
 
+Interesting implementation detail is, that BIRD can announce routes in two
+complementary ways. Either you can let it announce any route (\ttt{RA\_ANY}),
+than it will call the \ttt{rt\_notify} hook with the old and new route version,
+or you can receive only optimal route updates (\ttt{RA\_OPTIMAL}), which will
+announce old and new optimal route for a network prefix. Having the optimal
+mode on the request table will result in only three possible combinations of
+old and new route. When the old one is \NULL, and new one exists, this is a new
+request and we need to create the downstream state. When the old one exists and
+the new one is \NULL, the last request for this group and interface vanished,
+and it is safe to stop forwarding. When both the old and new route exists, we
+do not have to do anything, because we already consider this interface joined.
+
+\subsection{The DF election mechanism}
+On every interface and for every RPA known an election takes place. The
+election is based on the routers shouting their metric, and whoever shouts the
+most is the winner. The mechanism is rather complicated to avoid routing loops.
+Because of it, a state machine with a lot of transition edges is defined. The
+behavior of this machine is separated from the main code into the file
+\ttt{/proto/pim/df.c}.
+
+The majority of transition edges are based on an incoming packet. Every packet
+has a metric attached, there are four types of packets and four states of the
+state machine. To handle those 32 cases, there is a huge \ttt{switch}
+statement, which uses macros to combine all three variables into one number,
+and few another macros to keep the switch as small as possible while retaining
+readability.
+
+Whenever a packet comes, there is a quick lookup in the hash table to find the
+state structure \ttt{pim\_rp\_iface}. Then the \ttt{pim\_df\_message} method is
+called. Responses are sent immediately.
+
+This part required a notable change in BIRDs IO loop. Previously, the BIRDs
+timers had a precision of one second only. The reasons for this were explained
+in the section \ref{bird-internals}. The DF election must be fast, it's
+messages are spaced by $100\,$ms by default, so the BIRD timers were not an
+option. There already is a protocol which is more time sensitive, the BFD. It
+solves this problem by having a separate IO loop. But BFD does not alter the
+routing tables, and BIRD internals are not thread-safe, so having a separate
+loop for PIM is not an option.
+
+Because complete rewrite of the main loop is planned, we have decided only to
+temporarily hack the existing timers. It had to be done carefully not to break
+existing protocols. The solution was to add another field to the timer
+structure, keeping a btime. That is an already used BIRD time abstraction, with
+defined constants for most used time fractions. Because existing protocols
+sometimes use the original field, we have kept it there. Then, we've added new
+methods to work with these timers with a microsecond precision:
+\ttt{tm\_start\_btime}, \ttt{tm\_remains\_btime} and
+\ttt{tm\_start\_min\textrm{/}max\_btime}. The old respective ones were changed
+to convert seconds to btime and call the new methods. This way all the timers
+have the btime precision, but the old API was kept the same not breaking
+anything.
+
+\subsection{The forwarding logic}
+Having the RP tree build and knowing which branches we want to forward traffic
+to, the forwarding logic is pretty straightforward. But first, let us explain
+how we represent multicast routes. As in case of the multicast request,
+multicast routes are another special kind of ``networks'', and have their
+routing tables. The network type is called \ttt{mgrp4} or \ttt{mgrp6},
+depending on the IP version.
+
+Multicast routes are a bit different from the unicast ones. In unicast routing,
+the most common route has a next hop router, only the last-hop routers have the
+direct device route. As mutlicasts are always sent directly to link, no such
+thing as next-hop route exists. Furthermore, you often want to send a packet in
+multiple copies to several interfaces. We have discussed a bit how to control
+multicast routing in Linux in section \ref{mcast-kernel}, but we want to keep
+the internal tables system-independent.
+
+Every interface, which you want to use for multicast routing. must be assigned
+an index. These reflect the VIF indexes, but the implementation does not depend
+on the system indices. In order to assign an index, you must enable the
+interface for the \ttt{mkernel} protocol. If you don't, packets won't be
+forwarded, but you will not be warned. This is the expected behavior, because
+you probably do not want to forward traffic there, when you have explicitly
+disabled the interface for the \ttt{mkernel}.
+
+From the theoretical point of view, the most generiv representation for
+multicast routing table could be a mapping of $(S, G, I) \rightarrow O$,
+having a set of outgoing interfaces $O$ for every source $S$, group $G$ and
+input interface $I$. This is however too generic and space consuming, so we
+have made it simpler. First, there is no need to store a source yet, because we
+do not support source-specific multicast routing. Without the restriction to
+one source, there are often more incoming interfaces, for which the outgoing
+set is almost identical (typically having a common superset, from which the
+incoming interface is removed). Such routes can be merged, keeping a set of
+incoming interfaces. The outgoing set is often a subset of the incoming set.
+There could possibly be two disjunct sets of input interfaces, for which the
+output interfaces are different, but that is something we do not want to allow.
+
+The final representation of multicast routing table we decided to implement is
+a mapping of $G \rightarrow (\mathrm{iifs}, \mathrm{oifs})$, having a set of feasible incoming
+interfaces and set of outgoing ones for every group. When a packet comes on
+interface $I \in \mathrm{iifs}$ for a group $G$, forward it to every $O \in \mathrm{oifs}, O \neq I$.
+These sets are represented as bitmaps in the route. The bits are indexed by the
+\ttt{mkernel} assigned interface index.
+
+Having a multicast routing table, the forwarding logic of PIM is only a simple
+filtering aggregator of multicast requests. Whenever a routing change occurs,
+it constructs a new route for $G$, having all interfaces where the router is
+acting DF in incoming interfaces, and every interface for which a multicast
+requests exists and the router is acting DF in outgoing interfaces. Such
+a route is then announced to the routing table. When the group state is
+removed, a \NULL route is announced.

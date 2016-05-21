@@ -3,13 +3,10 @@ all: thesis.pdf
 thesis.pdf: img/rp-tree.pdf img/source-tree.pdf
 
 # LaTeX must be run multiple times to get references right
-thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib rfc.bib thesis.toc
-	#pdflatex $<
-	bibtex thesis
-	#pdflatex $<
+thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib rfc.bib
 	pdflatex $<
-
-thesis.toc: thesis.tex $(wildcard *.tex)
+	bibtex thesis
+	pdflatex $<
 	pdflatex $<
 
 img/%.pdf: img/%.asy img/lib.asy

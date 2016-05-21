@@ -10,7 +10,7 @@ at the time of writing is 1.6.0} supports BGP, OSPF, RIP and Babel.
 
 It is usualy enough to run only one routing protocol in your network, but there
 can be use cases when you need more protocols running, for instance in a border
-router between two network systems using different protocols already.
+router between two network systems already using different protocols.
 
 From the user point of view, the main units are the \emph{protocol} and the
 \emph{routing table}. Routing tables are simply tables containing routes, the
@@ -66,8 +66,9 @@ nor receive route updates, but periodically scans available network interfaces.
 Unless you have a very specific setup, this protocol is needed because other
 protocols need to know what devices do they have under control.
 
-Three more special protocols are implemented. The \texttt{static} protocol adds
-static routes. \texttt{Pipe} connects two tables and copies routes between
+Three more special protocols are implemented. You can specify some routes in
+the configuration, then the \texttt{static} protocol will add them to the BIRDs
+tables. The \texttt{pipe} connects two tables and copies routes between
 them. Of course, this is useful only with filters, otherwise you could have
 just used only one table. Last, the \texttt{direct} protocol generates routes
 that directly belong to some interface. That is useful, when your operating
@@ -131,3 +132,7 @@ interfaces. The static protocol defines some routes, we can see an usual route
 having next hop, blackhole route, which means every packet chosing this route
 will get silently dropped, and a recursive route, where the next hop is the
 same as the next hop for IP \ip{192.168.0.42}.
+
+
+
+\TODO{BIRDC}

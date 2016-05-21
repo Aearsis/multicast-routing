@@ -132,7 +132,7 @@ on RPL, because it is the upstream link for every router.
 
 There are four types of messages in the election: Offer, Winner, Backoff and
 Pass. Routers advertise their metrics as pairs of (protocol preference, distance).
-The state machine with all details is described in \rfc{5051}. The main idea of the
+The state machine with all details is described in \rfc{5015}. The main idea of the
 election is that every router advertises it's metric in Offer messages. When
 a router hears better Offer, it remains silent for a while. If not, after
 advertising its metric three times, it claims itself a winner. Winning is
