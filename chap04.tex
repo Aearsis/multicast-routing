@@ -12,7 +12,7 @@ Implementation of IGMP is pretty straightforward. It resides in
 In the last one we can find a packet processing code. As there are only two
 packet types in IGMPv2, this code looks simpler than similar code in other
 protocols. Because there can be only one IGMP control socket which receives all
-the packets, we have decided to open the control sockte in the mkernel protocol
+the packets, we have decided to open the control socket in the mkernel protocol
 and emulate packet receiving for IGMP instances.
 
 Because IGMP needs to send packets themselves, we decided to dedicate a special
@@ -236,10 +236,10 @@ the internal tables system-independent.
 Every interface, which you want to use for multicast routing. must be assigned
 an index. These reflect the VIF indexes, but the implementation does not depend
 on the system indices. In order to assign an index, you must enable the
-interface for the \ttt{mkernel} protocol. If you don't, packets won't be
+interface for the mkernel protocol. If you don't, packets won't be
 forwarded, but you will not be warned. This is the expected behavior, because
 you probably do not want to forward traffic there, when you have explicitly
-disabled the interface for the \ttt{mkernel}.
+disabled the interface for the mkernel.
 
 From the theoretical point of view, the most generiv representation for
 multicast routing table could be a mapping of $(S, G, I) \rightarrow O$,
@@ -259,7 +259,7 @@ a mapping of $G \rightarrow (\mathrm{iifs}, \mathrm{oifs})$, having a set of fea
 interfaces and set of outgoing ones for every group. When a packet comes on
 interface $I \in \mathrm{iifs}$ for a group $G$, forward it to every $O \in \mathrm{oifs}, O \neq I$.
 These sets are represented as bitmaps in the route. The bits are indexed by the
-\ttt{mkernel} assigned interface index.
+mkernel assigned interface index.
 
 Having a multicast routing table, the forwarding logic of PIM is only a simple
 filtering aggregator of multicast requests. Whenever a routing change occurs,
@@ -267,4 +267,63 @@ it constructs a new route for $G$, having all interfaces where the router is
 acting DF in incoming interfaces, and every interface for which a multicast
 requests exists and the router is acting DF in outgoing interfaces. Such
 a route is then announced to the routing table. When the group state is
-removed, a \NULL route is announced.
+removed, a \NULL{} route is announced.
+
+\section{The mkernel protocol}
+The protocol itself is hidden in the system-dependent source subtree,
+\ttt{/sysdep/unix/mkrt.c}, and we have tried to keep all inconveniences in the
+kernel design there. Because we need to reflect how kernel thinks of multicast
+routing, we were restricted in designing this protocol.
+
+First of all, you cannot run more than one instance of this protocol. This is
+a subject to change, because it is possible to have more than one kernel
+multicast routing table on some operating systems. Even when multiple tables
+are involved, there must be exactly one control socket opened. One task of the
+mkernel is to internally redistribute IGMP packets received there.
+
+Another thing mkernel does is assigning the interface multicast indices. It
+uses a simple algorithm, keeping a bitmap of used indices, and assigning the
+first available. Using this identifier, a VIF with the same index is created.
+Obviously, to assign an index, you have to pass this interface to the protocol.
+Because zero is a valid index too, when the index is assigned to a \ttt{struct
+iface}, a flag \ttt{IF\_VIFI\_ASSIGNED} is added too.
+
+The main purpose of this protocol is the routing table synchronization. If you
+look at the overview of kernel routes in the first chapter, you won't find
+a type similar to those we're using. To make matters worse, none of them is
+usable for our purposes. $(S, G)$ routes obviously works only when we know the
+source, and $(*,G)$ routes cannot limit the incoming interfaces per group.
+Ignoring this limitation would cause routing loops even in common scenarios.
+
+When a kernel does not find a matching MFC entry, it calls the userspace daemon
+to resolve the situation. In the PIM-SM mode, this often results in
+encapsulating the packet, but not in PIM-BIDIR. The so-called \emph{upcall}
+consists of sending an artificial IGMP packet with a packet type unused in the
+IGMP standard. The constants are defined in \ttt{<linux/mroute.h>}. Three
+upcalls can be found in the linux kernel source code:
+
+\begin{description}
+\item[IGMPMSG\_NOCACHE] There is a MFC miss. This is the only upcall we need to
+  listen to.
+\item[IGMPMSG\_WRONGVIF] A MFC entry exists, but on different interface than
+  expected. This upcall is sent only in one specific situation while switching
+  the RP and source-specific tree in PIM-SM, because otherwise it is a common
+  situation.
+\item[IGMPMSG\_WHOLEPKT] MFC miss, but the kernel is configured to pass us the
+  whole incoming packet for encapsulation.
+\end{description}
+
+When a MFC miss occurs, the packet is enqueued in the kernel. If the MFC entry
+is added fast enough, it will be resolved and forwarded afterwards. Because
+these packets are ordinary IGMP packets but it does not make sense to process
+them in the IGMP protocol, we are forced to partially parse the IGMP packet in
+the mkernel protocol. If it is one of these upcalls, resolve it now, otherwise
+pass it to the IGMP protocol(s).
+
+While resolving a MFC entry, we look up the route for the group, check if the
+incoming interface is in the iifs, and add a route specifically for this
+source. Because $(S,G)$ routes use a RPF check, we can control both iifs and
+oifs. The main problem in this method is reflecting changes in routing. When
+a route changes in BIRD, we are announced the group, but we need to change all
+the MFC entries for specific sources we have added. That means we have to
+remember what sources we've added and delete everything on every route change.

@@ -1,0 +1,80 @@
+\chapter{Multicast in the BIRD -- configuration}
+
+To use the multicast routing features in the BIRD, you must enable at least two
+protocols: PIM and mkernel. When any of the router's links have hosts
+connected, you probably want to enable also the IGMP. This chapter covers their complete configuration.
+
+\subsection{The IGMP}
+
+The IGMP listens for hosts' multicast reports, and fills the request table in
+the BIRD. The default values are well suited for the majority of use cases, but
+you still need to include the IGMP configuraton section for IGMP to run. Do it
+so whenever a router is connected to a link with local hosts. So, the most
+common configuration will be as following:
+
+\begin{lstlisting}
+protocol igmp { }
+\end{lstlisting}
+
+Configurable variables have the same names as in the IGMP standard, \rfc{2246}.
+Intervals are specified by time expressions to avoid unit problems. Have a look
+at a configuration example:
+
+\begin{lstlisting}
+protocol igmp {
+	interface "eth*" {
+	  robustness 2;
+	  query interval 125 s;
+	  query response interval 10 s;
+	  startup query count 2;
+	  startup query interval 31 s;
+	  last member query count 2;
+	  last member query interval 1 s;
+	};
+	mreq4 { import all; };
+}
+\end{lstlisting}
+
+All configuration variables are interface-specific. Let us go through their meaning:
+
+\begin{description}[style=nextline]
+\item[Robustness $k$]
+  Loss of less than $k$ packets cannot cause protocol to have inconsistent
+  states. Increasing $k$ will increase stability on lossy links, but groups
+  will be left slower.
+
+  Default value: 2
+
+\item[Query interval $t$]
+  A general query will be sent once per $t$. Decreasing $t$ will cause more
+  control traffic, but faster convergence on lossy links.
+
+  Default value: 125 seconds
+
+\item[Query response interval $t$]
+  Hosts have to send their report until $t$ passes. Larger values spread the
+  burst of control traffic after a general query.
+
+  Default value: 10 seconds
+
+\item[Startup query count $c$, startup query interval $t$]
+  When starting up, a loss of a query is critical, because it causes undetected
+  delay before starting to froward traffic. First $c$ queries are sent in
+  shorter interval $t$.
+
+  Default values: 2 messages, 31 seconds
+
+\item[Last member query count $c$, last member query interval $t$]
+  After receiving a leave, $c$ group specific queries are sent to the group,
+  once per $t$. After $c\cdot t$, router assumes there are no group members.
+  Decreasing these will cause groups to be left faster.
+
+  Default values: 2 messages, 1 second
+
+\end{description}
+
+There is also an implicit channel configuration for the multicast request
+table. IGMP instance can have only one channel of type \texttt{mreq4}
+configured. The defaults on channel are well suited here, so you can omit the
+line 11 completely. The IGMP can never be exported a route, it rejects
+everything.
