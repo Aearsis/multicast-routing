@@ -37,7 +37,6 @@ Then, testing the BIRD, even in complex setups, is as simple as:
 $ sudo netlab/netlab
 [netlab] # net_up
 [netlab] # start
-[r1] [r1n1] [r1n2] [r2] [r2n1] [r2n2] 
 [netlab] # log r1
 \end{lstlisting}
 
@@ -106,10 +105,10 @@ travelling upstream, stopping at the RPL. When you run the receiving script in
 the \ttt{recv} namespace, messages should start coming. You can use the netlab
 for this purpose:
 
-\begin{code}
+\begin{lstlisting}
 [netlab] # shell send
 [netlab send] # ./send.py
-\end{code}
+\end{lstlisting}
 
 When testing, please be aware that PIM needs a path to the RP to work. In the
 testing environment an OSPF instance is taking care of this, and it can take
