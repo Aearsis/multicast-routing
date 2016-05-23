@@ -2,9 +2,10 @@
 
 To use the multicast routing features in the BIRD, you must enable at least two
 protocols: PIM and mkernel. When any of the router's links have hosts
-connected, you probably want to enable also the IGMP. This chapter covers their complete configuration.
+connected, you probably want to enable also the IGMP. This chapter covers their
+complete configuration.
 
-\subsection{The IGMP}
+\section{The IGMP}
 
 The IGMP listens for hosts' multicast reports, and fills the request table in
 the BIRD. The default values are well suited for the majority of use cases, but
@@ -22,16 +23,16 @@ at a configuration example:
 
 \begin{lstlisting}
 protocol igmp {
-	interface "eth*" {
-	  robustness 2;
-	  query interval 125 s;
-	  query response interval 10 s;
-	  startup query count 2;
-	  startup query interval 31 s;
-	  last member query count 2;
-	  last member query interval 1 s;
-	};
-	mreq4 { import all; };
+  interface "eth*" {
+    robustness 2;
+    query interval 125 s;
+    query response interval 10 s;
+    startup query count 2;
+    startup query interval 31 s;
+    last member query count 2;
+    last member query interval 1 s;
+  };
+  mreq4 { import all; };
 }
 \end{lstlisting}
 
@@ -59,7 +60,7 @@ All configuration variables are interface-specific. Let us go through their mean
 
 \item[Startup query count $c$, startup query interval $t$]
   When starting up, a loss of a query is critical, because it causes undetected
-  delay before starting to froward traffic. First $c$ queries are sent in
+  delay before starting to forward traffic. First $c$ queries are sent in
   shorter interval $t$.
 
   Default values: 2 messages, 31 seconds
@@ -78,3 +79,239 @@ table. IGMP instance can have only one channel of type \texttt{mreq4}
 configured. The defaults on channel are well suited here, so you can omit the
 line 11 completely. The IGMP can never be exported a route, it rejects
 everything.
+
+\section{The PIM protocol}
+
+PIM tries to satisfy the multicast requests by joining the interface into
+a distribution tree. To use PIM to manage a group, you must configure it's RP
+address. You can specify a common RPA for a range of groups using a CIDR
+notation:
+\begin{lstlisting}
+protocol pim {
+  group 224.42.0.0/16 {
+    rpa 10.0.0.1;
+  }
+}
+\end{lstlisting}
+
+In order to function properly, all routers must be configured to use the same
+RPA for a group. When choosing a RPA, bear in mind that every multicast packet
+will have to be transfered to the link where RPA belongs. If you have only one
+fixed source, the best choice for RPA is the source address. Otherwise you can
+choose some address belonging to the backbone of your network.
+
+Other options for PIM are for fine-tuning the constants for specific
+interfaces (slow or lossy). An example follows:
+
+\begin{lstlisting}
+protocol pim {
+  interface "*" {
+    hello period 30 s;
+    hello delay 5 s;
+    hello holdtime 105 s;
+
+    election robustness 3;
+
+    override interval 3 s;
+    joinprune period 60 s;
+    joinprune holdtime 60 s;
+  };
+}
+\end{lstlisting}
+
+\begin{description}[style=nextline]
+\item[Hello period $t$]
+  A PIM hello packet is sent once per $t$. PIM does not use BFD, and a depends
+  on hello packets to detect a neighbor failure.
+
+  The default value is 30 seconds.
+
+\item[Hello holdtime $t$]
+  This value is announced to neighbors. After a period of $t$ without receiving
+  a hello packet from this router, neighbors assume this router is dead.
+
+  If omitted, its value is calculated as $3.5\mathop{\cdot}\hbox{hello period}$.
+
+\item[Hello delay $t$]
+  A maximum value for the random delay before sending a first hello. It
+  prevents bursts of control traffic when the link becomes up.
+
+  The default value is 5 seconds.
+
+\item[Election robustness $R$]
+  The minimum number of packets that must be lost to break the DF election
+  mechanism. Every message is transmitted $R$ times. The larger the $R$, the
+  slower the election will be, but it will be more prone to packet loss.
+
+  The default value is 3.
+
+  The delays between election messages are not configurable, their value is
+  specified in the standard.
+
+\item[Override interval $t$]
+  When a prune is received, other routers on a link interested in a traffic for
+  $G$ must send their overriding join during $t$. After a delay of $t$, this
+  router assumes there are no routers and will stop forwarding $G$ to this
+  link.
+
+  Note that this value can be changed in the runtime through options in hello
+  messages.
+
+  The default is 3 seconds.
+
+\item[Join/Prune period $t$]
+  A Join message for every group will be sent once per $t$, unless other router
+  is sending them.
+
+  The default value is 60 seconds.
+
+\item[Join/Prune holdtime $t$]
+  This value is transmitted to the upstream neighbor. After a period of $t$,
+  the neighbor assumes we have pruned the group but the Prune packet was
+  lost.
+
+  If not present, the value is set to $3.5\mathop{\cdot}\hbox{Join/Prune
+  period}$.
+\end{description}
+
+The channel configuration of PIM is more complicated than other protocols',
+because PIM is connected to three routing tables of different type. The basic
+setting (not the default though):
+
+\begin{lstlisting}
+protocol pim {
+  ipv4  { import none; export all;  }
+  mreq4 { import all;  export all;  }
+  mgrp4 { import all;  export none; }
+}
+\end{lstlisting}
+
+The multicast route channel (\ttt{mgrp4}) has the default setting, causing
+multicast routes to be propagated into kernel, and no routes are announced
+back. It does not make much sense to learn multicast routes from other
+protocols.
+
+If you leave the default \ttt{export none} setting for the multicast request
+channel \ttt{mreq4}, PIM will only forward traffic upstream. Reasons for the
+decision to loop PIM internal requests through the multicast requests table can
+be found in section \ref{why-pim-mreq}.
+
+The last channel, \ttt{ipv4}, provides the multicast routing protocol the
+network topology, the MRIB. The topology is read-only for PIM, no routes are
+imported back to the routing table. If you do not supply any topology to PIM
+(for example by leaving the export filter on its default value \ttt{none}), PIM
+will not know it's upstream interface and therefore cannot join the shared
+tree.
+
+By changing the MRIB channel, you can unleash the full power of BIRD. To give
+an example, imagine you ar running a system of networks running a BGP. As
+a metric, you are using the link reliability, having the BIRD select the most
+reliable route as the best. Now you would like to use multicast for
+videoconferences. For transfering video, there are more important properties of
+the connection than reliability -- bandwidth, low and stable latency. In BIRD,
+this is very easy. Just create an internal routing table, run another routing
+protocol (either a different one, or BGP with different settings) and supply
+its topology to PIM as the MRIB. Unicast is still routed the same, but
+multicasts will use a different path.
+
+The PIM while electing the designated forwarder advertises the IGP metric, and
+the one with best metric becomes the forwarder. You can alter the metric
+exported to PIM to any value you want, so you do not even have to run two
+separate routing protocols.
+
+\section{The mkernel protocol}
+
+There is nothing you can configure in the mkernel protocol directly. You only
+need to include the configuration section to enable the multicast routing
+features.
+
+\begin{lstlisting}
+protocol mkernel {
+  mgrp4 { export all; }
+}
+\end{lstlisting}
+
+\noindent You must still configure the only channel mkernel uses. By default it
+is connected to the routing table \ttt{mroute4}. As mkernel never announces any
+route, the default filter settings are pretty much useless. You can see the
+most basic configuration in the last example.
+
+\section{Dump output}
+You can use the BIRD client to examine protocol behavior. Let us show some
+actual output and walk throug its meaning. This output was gathered by
+connecting to a running BIRD with the configuration presented in this chapter.
+The only difference was running an OSPF protocol to map the network topology.
+Unrelated protocols were omitted from the output.
+
+\begin{lstlisting}
+birdc> dump protocols
+  protocol mkernel1 state UP
+    TABLE mroute4
+    VIFS as in bitmaps:
+      veth-br1 veth-r1 d1
+    (S,G) entries in MFC in kernel:
+      (10.3.3.1, 224.42.42.42, veth-br1) -> 111 110
+\end{lstlisting}
+
+First you can see the mkernel protocol running. It is connected to the default
+table \ttt{mroute4}, with both filters set to accept all. Then mkernel lists
+interfaces which were assigned an index for multicast routing. Follows a list
+of (S,G) entries that were inserted in the kernel. Every entry has three
+fields: a source address, a group address and the incoming interface. After the
+arrow there are two bitmaps from the original route, a set of incoming and
+outgoing interfaces. Every interface from the list of VIFS has either a zero or
+one, and they are in the same order.
+
+\begin{lstlisting}[firstnumber=8]
+  protocol igmp1 state UP
+    TABLE mreq4
+    Output filter: REJECT
+    Interface d1 is up, querier
+    Interface veth-r1 is up, other querier present
+    Interface veth-br1 is up, querier
+\end{lstlisting}
+
+The IGMP dumps only its interfaces. An IGMP router can be either the querier on
+the link, or just passively listening because other querier is present. That
+happened on the interface veth-r1.
+
+\begin{lstlisting}[firstnumber=14]
+  protocol pim1 state UP
+    TABLE master4
+    Input filter: REJECT
+    TABLE mreq4
+    TABLE mroute4
+    Output filter: REJECT
+    Interface d1, up, holdtime 105, gen ID 413907797
+    Interface veth-r1, up, holdtime 105, gen ID 957644869
+      Neighbor 10.10.1.1 UP BIDIR
+    Interface veth-br1, up, holdtime 105, gen ID 3449771873
+      Neighbor 10.3.1.4 UP BIDIR
+      Neighbor 10.3.1.2
+    Group 224.42.42.42, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-br1
+    Group 224.0.0.2, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-r1 veth-br1
+    Group 224.0.0.5, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-r1 veth-br1
+    Group 224.0.0.6, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-br1 veth-r1
+    Group 224.0.0.13, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-r1 veth-br1
+    Group 224.0.0.22, RP 10.1.0.42,
+      PIM joins: veth-br1; joined on: veth-r1 veth-br1
+    RP 10.1.0.42, RPF veth-r1
+      iface veth-br1, DF state: Winner, DF: ::
+      iface veth-r1, DF state: Lose, DF: 10.10.1.1
+      iface d1, DF state: Winner, DF: ::
+\end{lstlisting}
+
+The PIM protocol has significantly more to output. First, PIM enabled
+interfaces are listed with their settings and neighbors known there. You can
+see both neighbors are BIDIR capable from the flags. There are packets coming
+from the neighbor \ip{10.3.1.2}, but we haven't seen a hello from it yet. Then
+there is a list of groups with existing state. For every group you can see its
+RPA, interfaces which joined the group downstream by PIM Join mechanism, and
+all interfaces for which a multicast request exists. Finally, for every RP tree
+this router is connected to, there is a RP section. You can see the upstream as
+the RPF, then the DF election state for every interface.

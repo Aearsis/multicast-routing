@@ -1,2 +1,105 @@
 \chapter{Testing}
-\TODO{Netlab}
+
+An important part of development is testing. It is hard to test network
+protocol, because a lot of code depends on the network state and temporary
+conditions. Also, especially for testing routing protocols, you need multiple
+networks, and run more than one instance of the routing daemon.
+
+There are several tools that can virtualize network topology. Most of them are
+based on virtual machines or containers. This is useful for configuration or
+performance testing, but not that much for development. We've created
+a lightweight testing framework based on Linux network namespaces to suit our
+needs.
+
+While developing the multicast routing features, we continuously tested it in
+various testing environments, targeting the concrete feature being developed.
+The IGMP implementation is tested agains Linux kernel, which works as the IGMP
+host.
+
+More complicated situation is with the PIM protocol, because we haven't
+found any software solution doing the bidirectional variant of PIM. There are
+routers from Cisco or Juniper which are able to manage a group in bidirectional
+mode, but we haven't been provided any to test our implementation against it.
+The network analyzer Wireshark is able to parse even Bidirectional PIM packets,
+and we've examined the packets our implementation sends whether they are
+constructed correctly. Of course, the PIM implementation in BIRDs works
+correctly against itself.
+
+\section{Netlab}
+Our testing framework is called the \emph{netlab}. It is published in its
+separate repository on Github\footnote{https://github.com/Aearsis/netlab}.
+
+To use this framework, you must clone the repository into the root of the BIRD
+repository, or change the path to BIRD inside the main executable of netlab.
+Then, testing the BIRD, even in complex setups, is as simple as:
+
+\begin{lstlisting}
+$ sudo netlab/netlab
+[netlab] # net_up
+[netlab] # start
+[r1] [r1n1] [r1n2] [r2] [r2n1] [r2n2] 
+[netlab] # log r1
+\end{lstlisting}
+
+You can describe the testing network using a simple declarative language. For
+example, a setup running two BIRDs connected directly by an Ethernet cable:
+
+\begin{lstlisting}
+NETLAB_CFG="$NETLAB_BASE/cfg"
+
+netlab_node r1
+netlab_node r2
+if_veth r1 r2 10.10.1
+\end{lstlisting}
+
+It is very simple to add bridges, dummy nodes representing subnets, or to
+create a namespace where to run other programs sending and receiving multicat
+packets. This is the network we've done the most of the testing on:
+
+\vskip 10cm
+\TODO{Image.}
+
+\section{Testing multicast}
+To actually test the multicast forwarding, we have used simple python scripts.
+
+\begin{lstlisting}[language=python]
+#!/usr/bin/env python
+import socket,struct,time
+
+def setup(ga):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32)
+    mreq = struct.pack("4sl", socket.inet_aton(ga), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    return sock
+
+def send(ga, port, msg):
+    sock = setup(ga)
+    bmsg = msg.encode('us-ascii')
+    while 1:
+        sock.sendto(bmsg, (ga, port))
+        time.sleep(0.1)
+
+def recv(ga, port):
+    sock = setup(ga)
+    sock.bind((ga, port))
+    while 1:
+            data, addr = sock.recvfrom(1024)
+            print(data.decode('us-ascii'))
+
+# send.py
+send('224.42.42.42', 42000, "What hath god wrought!");
+
+# recv.py
+recv('224.42.42.42', 42000)
+\end{lstlisting}
+
+For example, running the send script in the \ttt{send} namespace in the setup
+above, the script joins a group and then starts sending a lot of messages. If
+run a packet sniffer, for example \ttt{tcpdump}. you should see the traffic
+travelling upstream, stopping at the RPL. When you run the receiving script in the \ttt{recv} namespace, messages should start coming.
+
+When testing, please be aware that PIM needs a path to the RP to work. In the
+testing environment an OSPF instance is taking care of this, and it can take
+a minute to initialize.

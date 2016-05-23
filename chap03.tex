@@ -46,7 +46,7 @@ some form of hello messages. But these often have long reaction period in the
 order of tens of seconds. A protocol named BFD tries to provide faster, low
 overhead failure detection. It serves as an advisor to other protocols.
 
-Another protocol implemented in the BIRD is RAdv. It is used by routers to
+Another protocol implemented in the BIRD is RAdv. It is used by IPV6 routers to
 advertise an available network prefix allowing hosts to autoconfigure.
 
 \section{Special protocols}
@@ -118,8 +118,6 @@ Let's try something more interesting, omitting the kernel and device protocol:
 
 \lstinputlisting{cfg/rip_ospf.cfg}
 
-\TODO{Check if these are working :)}
-
 Using natural language, these directives are very easily readable and
 self-explanatory. There are multiple levels of messages in the log, and
 especially the level \texttt{trace} has categories; \texttt{debug packets}
@@ -132,6 +130,113 @@ interfaces. The static protocol defines some routes, we can see an usual route
 having next hop, blackhole route, which means every packet chosing this route
 will get silently dropped, and a recursive route, where the next hop is the
 same as the next hop for IP \ip{192.168.0.42}.
+
+\section{The internals}
+The overall architecture can be called event-driven. When you implement a new
+protocol, you register hooks to be called when there is an interface status
+change, route update, protocol is about to be shut down, reconfigured and so on.
+The most interesting hooks can be registered on sockets and timers.
+
+BIRD sockets are a thin layer over traditional UNIX sockets. They try to hide
+incompatibilities between diferent UNIXes by providing system-dependent
+implementation. But the main benefit of them is simplified receiving and
+sending packets using hooks.
+
+What might be suprising, BIRD is single-threaded. It has only one IO loop that
+dispatches these hooks. That means you do not have to mess with locking in the
+common code, but it comes with a few drawbacks. In the loop, there is
+a \texttt{select} syscall waiting on all sockets. Whenever there are some data
+waiting, BIRD calls \verb|rx_hook| on that socket.
+
+Another very common usage pattern in network protocols are timers. You often
+need to send a message every ten seconds, or let something timeout. It would be
+too expensive to have three threads sleeping for every network prefix, so BIRD
+introduces internal timers. Timers have one hook and a time when it should be
+called. BIRD does not promise an exact time, but it ensures the hook would not
+be called sooner. The timeout for the select in the loop is set to the time
+until the first timer should be fired.
+
+When doing some computations that can take a long time, for example going
+through a complete routing table, you cannot do it in single hook as there can be
+other, possibly time sensitive, protocols waiting for their time. A mechanism
+called events was made for this purpose. Event can be \emph{scheduled},
+and its hook will run at the end of current IO loop cycle. It is recommended to
+split such long-running pieces of code into several event calls, simulating
+multiple threads running with less overhead than actually having them.
+
+Because there are computations in the IO loop that can take longer time, it is
+not possible to have precise timers. For that reason, internal timers had the
+precision of one second. When a timer is delayed by two seconds, it does not
+matter much when it was set to ten seconds. But the same delay introduced to
+a few millisecond timer can be critical.
+
+Traversing over a routing table spread over more iterations of the main IO loop
+brings several problems. When any event is called in between, you have to deal
+with added entries, removed entries (especially the current one being removed),
+and complete rehashes of the table. Routing table is stored in clever hash
+table called FIB, \emph{Forwarding Information Base}. This table follows
+a special property making elements keep their relative order when the table is
+rehashed. Furthermore, every node keeps a list of iterators, and when the node
+is removed, it moves all iterators to the next element.
+
+\subsection{Resources}
+Common software problem, dangeorus especially for daemons, is memory leakage.
+When writing network software, one often needs to allocate temporary structures
+for holding additional information tied to interface, neighbor or network
+prefix. It can happen and often happens, that you lose all handles to allocated
+memory and you cannot deallocate it. This forgotten memory cummulates over time
+and memory usage of your daemon grows. When it overgrowths the limited memory
+in embedded devices, your daemon is killed.
+
+BIRD tries to fight (not only) this problem with dedicated mechanisms for
+memory allocations. There is one, root, memory pool. Pools can have another
+pools inside. For example, every protocol instance has its own pool. When the
+protocols shuts down, its pool is completely deallocated, leaving no room for
+memory leakage.
+
+This mechanism has more advantages. Every resource type can have its destructor
+specified, so it can remove itself from lists, free related memory and so. To
+give an example, timers has their own resource type, and when a timer is freed
+it removes itself from the list of upcoming timers. Or, when a socket is
+closed, it deallocates its buffers.
+
+Resource pools offer multiple memory allocation strategies, making them more
+efficient. BIRD offers memory blocks (the usual strategy similar to
+malloc/free), linear memory pool and Slabs. Linear memory pools are handy when
+creating a temporary structure (which will be freed as a whole after using).
+Slabs are efficient in managing a lot of fixed size blocks, for example the FIB
+nodes.
+
+\subsection{System dependent parts}
+Routing daemon, whether we want or not, does have to communicate tightly with
+the kernel. The BIRD is written with all UNIX-like operating systems in mind,
+and it was originally developed at least for Linux and BSD. However, the
+development of last years is strongly focused on Linux only.
+
+To avoid having a lot of compile-time checks and conditionally compiled blocks,
+BIRD has a source code subtree, which is linked according to the target
+operating system. This subtree is called \ttt{sysdep}. There are parts which
+are special for Linux or BSD, but alos parts common for all UNIXes. The
+creators of BIRD wanted to make porting to different operating systems as
+simple as possible.
+
+When you look in the sysdep code, you will find for example functions to read
+system time, to communicate with the kernel or the socket abstraction layer,
+but also the whole implemetation of the main IO loop. If you look into the
+forbidden lands of the kernel protocol, you will find arcane magic.
+
+\section{Runtime communication with BIRD}
+To communicate with the running daemon, BIRD provides a shell-like utility,
+\ttt{birdc}. You can commands to examine the routing tables, dump protocol
+information or to change the configuration on-the-fly by disabling and enabling
+protocol instances. The client needs to open a connection to the control
+socket, and therefore you usually have to run it with the root privileges.
+
+When you update the configuration, it is possible to reload it to the running
+daemon without losing routing tables in the memory. BIRD tries to avoid
+restarting as much as possible. There are mechanisms how to reconfigure
+a running protocol, how to restart it without losing its routes or how to
+restart only those protocols that changed too much.
 
 
 

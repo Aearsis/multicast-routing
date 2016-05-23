@@ -153,6 +153,7 @@ multicast request table. The entry is then, being a route, announced back to
 the PIM. Because the PIM does not make a difference between different multicast
 requests, it is essentialy the same situation as on the downstream router.
 
+\label{why-pim-mreq}
 This way the mechanism is split into two layers -- downstream, receiving PIM
 joins, and upstream, propagating any joins to the upstream neighbor. Of course,
 looping the simple request through the BIRDs routing tables introduces a small

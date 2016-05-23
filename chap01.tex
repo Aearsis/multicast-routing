@@ -8,11 +8,11 @@ specification can be found in \rfc{1112}.
 
 In local networks, multicasts are similar to broadcasts. Every packet is to be
 transmitted to every host on the same link, and each host can decide according to
-the destination address whether or not it should be processed or alltogether
+the destination address whether or not it should be processed or altogether
 dropped. In other words, you need neither a multicast routing capable router
 nor any special network hardware to use multicast in one network.
 
-Differences are notable on internetwork level. While broadcasts should be
+Differences are notable on inter-network level. While broadcasts should be
 either forwarded to all links or filtered completely by routers, multicasts
 should have more controlled behavior.
 
@@ -37,10 +37,10 @@ conformance. Level 1 requires hosts to be able to send packets to multicast
 groups. This level still requires little code in networking stack, because
 sending a packet to a multicast group is very similar to sending it as an unicast
 packet with a destination address set to the group address. While it doesn't make much
-sense to send unicast packets destinated outside the local network prefix directly
+sense to send unicast packets destined outside the local network prefix directly
 to the link, it is the expected behavior with multicast.
 
-Level 2 means fully conformant, able to send and receive multicast traffic.
+Level 2 means fully conforming, able to send and receive multicast traffic.
 
 \section{Internet Group Management Protocol}
 
@@ -54,7 +54,7 @@ versions are backward compatible. Whenever there is a router which only knows
 older version, all the newer ones stop sending any packets and only receive and observe.
 
 The purpose of IGMP is to exchange information about group membership between
-hosts and routers. Note that it is mandatory to implement IGMP to participatein
+hosts and routers. Note that it is mandatory to implement IGMP to participate in
 a multicast group, but until a multicast packet crosses the boundary of a single network, it
 is delivered as broadcast to all hosts. As such all hosts receive it without
 the routers being involved.
@@ -117,7 +117,7 @@ As the multicast is technically a broadcast on the link layer, it would be possi
 use the broadcast address \mac{FF:FF:FF:FF:FF:FF}.
 But that would mean that every multicast packet on the network must be received by all
 hosts and examined by their operating systems, because there is no way how to filter
-it on the hardware level. For this purpose, every ethernet address with the
+it on the hardware level. For this purpose, every Ethernet address with the
 least significant bit of the first byte set is considered to be
 a broadcast address and is to be flooded to all nodes on this network. Network
 hardware generally does not make a difference between them, so we can associate
@@ -144,7 +144,7 @@ to the operating system.
 What was written above is true according to the specifications, but not really
 reflecting the real state of the art. Link layer hardware such as switches often does
 make a difference and it uses a technique called \emph{IGMP snooping}. This is described
-in \rfc{4541}. This RFC is only informational, beacause a lot of network hardware with
+in \rfc{4541}. This RFC is only informational, because a lot of network hardware with
 this functionality was produced before this RFC and do not behave in any
 standardized way. Network switches performing IGMP snooping understand IGMP. They
 listen to routers communicating with hosts and filters multicast traffic on
@@ -167,7 +167,7 @@ You can check its status and configure it through special files located in
 \section{Kernel implementation}
 
 The system interface for multicast is pretty complicated. At least differences
-between UNIXes are not big. Let us start with code to receive multicast traffic
+between Unixes are not big. Let us start with code to receive multicast traffic
 in an ordinary application. It is as simple as opening a socket and setting it
 up by some \setsockopt calls:
 
@@ -206,7 +206,7 @@ setsockopt(fd, IPPROTO_IP, MRT_INIT, &v, sizeof(v));
 
 Syscalls \texttt{setsockopt} related to the multicast have option names starting
 with \texttt{MRT\_}. These constants are defined in \texttt{<linux/mroute.h>}.
-Because they are essentialy a function calls, allow us to say ``call
+Because they are essentially a function calls, allow us to say ``call
 \texttt{MRT\_INIT}'' with the meaning of calling \setsockopt with the option
 name \texttt{MRT\_INIT}.
 
