@@ -136,6 +136,13 @@ to share information among PIM compile units.
 The PIM itself is split into three logical units, which share a common state.
 The join/prune mechanism, the DF election mechanism and the forwarding logic.
 
+\begin{figure}[htp]
+\centering
+\vskip 6cm
+\caption{\TODO{Image of how the logical parts communicate}}
+\label{pim-parts}
+\end{figure}
+
 \subsection{The join/prune mechanism}
 When the routers distribute traffic over the RP tree, they need to know which
 branches do have receivers for a group $G$. The JP mechanism is connected to

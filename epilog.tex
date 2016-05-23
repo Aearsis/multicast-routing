@@ -1,5 +1,48 @@
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
 
-Most of the time it was studying how bird works internally not to break
-anything and to follow undocumented coding standards // best practices.
+We have succeeded in implementing the multicast routing features to the BIRD.
+Because the protocol is fairly complex, it deserves to be more tested and, what
+is more important, reviewed by the BIRD team. They were too busy to deep-study
+my implementation continuously. But merging the PIM into BIRD is on the plan.
+
+The source code for the whole project is available on the
+Github\footnote{https://github.com/Aearsis/bird}. As it is versioned by the
+git, you can clearly see what my contributions are.
+
+There were a considerable amount of obstacles during the work. First, I had to
+learn how the BIRD itself works. It is not a small project, and there are lots
+of internal details one must know before starting to contribute in a major way.
+Also, I have decided to change the existing BIRD code as little as possible and
+write my code in the spirit of the existing one, to follow the coding practises
+and used design patterns. That made me study the code for even longer time, but
+hopefully it will pay off when merging to the main development branch.
+
+Next, there were problems with undocumented code in Linux kernel. Looking back,
+when we know where to look for the issues, they seem trivial. But they blocked
+the work for a while. Namely, all the surprises around the IGMP control socket,
+details about how MFC entries work or the Linux bridge doing IGMP snooping by
+default.
+
+Naturally, there are many ways how to expand this project. The first dorection
+should be a support for IPv6. It should be fairly simple, because the internal
+structures are prepared for it. Also, the PIM itselg should be able to run on
+IPv6 out of the box, but this behavior is not tested. One just need to
+implement the MLD protocol (IPv6 equivalent of the IGMP), and the IPv6 kernel
+route synchronization. In the kernel, the v6 API looks like a copy of the v4,
+on which a few text substitutions were applied.
+
+Next, it would be great to implement another modes of the PIM, namely PIM-SM.
+Again, the design of the PIM protocol is prepared for it. One would need to
+add the different types of packets PIM-SM uses and prepend source address to
+the internal structures. It will probably not be that easy, but we cannot see
+any fundamental problem now.
+
+For the bravest, the part that needs reimplementation the most is the Linux
+kernel itself. The implementation of multicast forwarding is copied from BSD to
+stay compatible with the mrouted daemon, and it reflects how mrouted works.
+That is not always the most convenient way. Also, the multicast input, IGMP
+processing and other related chunks of code looks more like a hack than
+a systematical solution. It would be great to have a clean netlink API to
+control the multicast routing table, without the need to control everything
+through one almighty socket.

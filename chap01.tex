@@ -171,18 +171,19 @@ between Unixes are not big. Let us start with code to receive multicast traffic
 in an ordinary application. It is as simple as opening a socket and setting it
 up by some \setsockopt calls:
 
-\TODO{Example -- code to open socket, set up multicast, join group, ...}
+\lstinputlisting[firstline=8, lastline=18]{examples/socket.c}
 
 \noindent One thing to note here. When there is a socket opened which joined a group, the host itself joins the group by means of IGMP. And when the host is
 joined, every other multicast-enabled socket will get all packets addressed to that
-group. So, you still need to filter those at the transport level or higher.
+group. So, you still need to filter those at the transport layer (using ports
+for example) or by yourself in the application.
 
 When the router daemon wants to receive all the IGMP packets for all groups, it
 would have to join every group possible. That is certainly not the way to go.
 IGMPv2 suggests using the IP option \emph{Router Alert}. Every IP packet with this option
 set should be passed to all sockets that order it by this \setsockopt call:
 
-\TODO{Example -- code calling \setsockopt IP\_ROUTER\_ALERT}
+\lstinputlisting[firstline=8, lastline=11]{examples/igmp_socket.c}
 
 \noindent There are multiple problems with this. Backward compatibility with
 IGMPv1 is broken, and standard does not force hosts to set the option. Some (e.g.
@@ -192,6 +193,7 @@ To my surprise, there is only one way how to get all IGMP packets coming on
 some interface. That is opening the IGMP control socket.
 
 \subsection{Multicast kernel interface}
+\label{mcast-kernel}
 
 When we want to control kernel multicast routing tables, we need to open
 a control socket. That is a raw IP socket with a type \texttt{IPPROTO\_IGMP}.

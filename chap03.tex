@@ -132,6 +132,7 @@ will get silently dropped, and a recursive route, where the next hop is the
 same as the next hop for IP \ip{192.168.0.42}.
 
 \section{The internals}
+\label{bird-internals}
 The overall architecture can be called event-driven. When you implement a new
 protocol, you register hooks to be called when there is an interface status
 change, route update, protocol is about to be shut down, reconfigured and so on.
@@ -225,7 +226,7 @@ system time, to communicate with the kernel or the socket abstraction layer,
 but also the whole implemetation of the main IO loop. If you look into the
 forbidden lands of the kernel protocol, you will find arcane magic.
 
-\section{Runtime communication with BIRD}
+\section{The user interface}
 To communicate with the running daemon, BIRD provides a shell-like utility,
 \ttt{birdc}. You can commands to examine the routing tables, dump protocol
 information or to change the configuration on-the-fly by disabling and enabling
@@ -237,7 +238,3 @@ daemon without losing routing tables in the memory. BIRD tries to avoid
 restarting as much as possible. There are mechanisms how to reconfigure
 a running protocol, how to restart it without losing its routes or how to
 restart only those protocols that changed too much.
-
-
-
-\TODO{BIRDC}

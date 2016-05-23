@@ -56,8 +56,12 @@ It is very simple to add bridges, dummy nodes representing subnets, or to
 create a namespace where to run other programs sending and receiving multicat
 packets. This is the network we've done the most of the testing on:
 
+\begin{figure}[htp]
+\centering
 \vskip 10cm
-\TODO{Image.}
+\caption{\TODO{The network scheme}}
+\label{pim-channels}
+\end{figure}
 
 \section{Testing multicast}
 To actually test the multicast forwarding, we have used simple python scripts.
@@ -98,7 +102,8 @@ recv('224.42.42.42', 42000)
 For example, running the send script in the \ttt{send} namespace in the setup
 above, the script joins a group and then starts sending a lot of messages. If
 run a packet sniffer, for example \ttt{tcpdump}. you should see the traffic
-travelling upstream, stopping at the RPL. When you run the receiving script in the \ttt{recv} namespace, messages should start coming.
+travelling upstream, stopping at the RPL. When you run the receiving script in
+the \ttt{recv} namespace, messages should start coming.
 
 When testing, please be aware that PIM needs a path to the RP to work. In the
 testing environment an OSPF instance is taking care of this, and it can take
