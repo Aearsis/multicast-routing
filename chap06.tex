@@ -100,10 +100,16 @@ recv('224.42.42.42', 42000)
 \end{lstlisting}
 
 For example, running the send script in the \ttt{send} namespace in the setup
-above, the script joins a group and then starts sending a lot of messages. If
-run a packet sniffer, for example \ttt{tcpdump}. you should see the traffic
+above, the script joins a group and then starts multicasting a lot of messages.
+If run a packet sniffer, for example \ttt{tcpdump}. you should see the traffic
 travelling upstream, stopping at the RPL. When you run the receiving script in
-the \ttt{recv} namespace, messages should start coming.
+the \ttt{recv} namespace, messages should start coming. You can use the netlab
+for this purpose:
+
+\begin{code}
+[netlab] # shell send
+[netlab send] # ./send.py
+\end{code}
 
 When testing, please be aware that PIM needs a path to the RP to work. In the
 testing environment an OSPF instance is taking care of this, and it can take

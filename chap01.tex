@@ -307,3 +307,10 @@ different uplinks, but it will work only when the active interfaces are
 disjunct. There are no checks to prevent you from adding an entry that would
 never be found, so it is hard to guess which behavior is intentional and which
 is not.
+
+You may wonder whether it is possible to add unicast routes for multicast
+addresses. It is, but their meaning is different. These routes are never used
+to forward packets. Instead, when you open a socket and do not specify an
+outgoing interface for a multicast packet (\ttt{IP\_MULTICAST\_IF}), the interface
+will be selected using these routes. If no matching route exists, the sending
+will fail.
