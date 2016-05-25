@@ -286,7 +286,7 @@ VIF~$i$.
 In Linux, there are two more types of MFC entries: $(*,G)$ and $(*,*)$. These
 are added by a call \ttt{MFC\_ADD\_MFC\_PROXY}, and they have a completely different
 meaning. I haven't found any explanation for these, my assumptions are based on
-studying the kernel source code. The proxy entries are used to build a shared
+studying the kernel source code \cite{linux}. The proxy entries are used to build a shared
 tree, possibly statically, common for all groups. First, you have to choose one
 uplink interface~$i$, and add a~$(*,*)$ entry with a \ttt{mfcc\_parent} set
 to~$i$. Whenever a packet comes to an active interface, and no $(*, G)$ MFC
