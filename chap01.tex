@@ -46,6 +46,7 @@ As already said, membership in a multicast group is optional. By default, there
 is only one group that every host listens to --- the \ttt{ALL-HOSTS} group with address
 \ip{224.0.0.1}. There must be a way for hosts to express group membership.
 A~protocol exists for this purpose and it is called IGMP.
+\nomenclature{IGMP}{Internet Group Management Protocol}
 
 The most recent version of IGMP is 3. It is described in \rfc{3376}. However, all
 versions are backwards compatible. Whenever there is a router which only knows
@@ -111,6 +112,7 @@ group addresses. When sending an unicast packet, a mechanism called Address
 Resolution Protocol (\emph{ARP}, \rfc{826}) is used to determine the MAC
 address. It is done simply by broadcasting questions ``Who has this IP
 address?'' and collecting answers and caching them.
+\nomenclature{MAC}{Media Access Control}
 
 As the multicast is technically a broadcast on the link layer, it would be possible to
 use the broadcast address \mac{FF:FF:FF:FF:FF:FF}.
@@ -134,8 +136,8 @@ missing bits.
 A multicast router needs to receive packets for all groups because IGMP reports
 are sent there. To enable this behavior, interfaces often have an ``all multicast''
 mode, which lets all multicast frames pass through. This mode is also used when
-the filter table on the NIC is too small to contain all the filters needed. Or
-we can put the NIC into a so-called promiscuous mode, which passes all frames
+the filter table on the interface is too small to contain all the filters needed. Or
+we can put the interface into a so-called promiscuous mode, which passes all frames
 to the operating system.
 
 \subsection{IGMP snooping}
@@ -227,6 +229,7 @@ Let us have a look on how to control the multicast routing. As the first thing
 we need to add \emph{virtual interfaces} (VIFs). A VIF can be built on top of
 a~real network device, an IPIP tunnel, or it can create a special purpose device.
 Multicast routing table entries operate only on subsets of VIFs.
+\nomenclature{VIF}{Virtual Interface}
 
 There can be only a very limited number of VIFS. This number is currently
 controlled by a kernel compile-time constant \ttt{MAXVIFS}, which defaults to 32. It is not easy
@@ -253,6 +256,7 @@ forwarding is called Multicast Forwarding Cache (MFC). A MFC entry can be added
 by filling a \ttt{struct mfcctl} and calling \ttt{MRT\_ADD\_MFC} or
 \ttt{MRT\_ADD\_MFC\_PROXY}. The difference between these two will be
 explained later.
+\nomenclature{MFC}{Multicast Forwarding Cache}
 
 \begin{lstlisting}[language=c]
 struct mfcctl mc = { 0 };

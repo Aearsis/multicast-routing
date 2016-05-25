@@ -13,16 +13,20 @@ have to take a slightly different approach. For every multicast group, they stil
 try to build a tree connecting all traffic sources and receivers. Multicast
 routing protocols often reuse the unicast routing topology to create the
 multicast routing information base (MRIB).
+\nomenclature{MRIB}{Multicast Routing Information Base}
 
 Protocol Independent Multicast (PIM) is a whole family of multicast routing
 protocols. Different protocols in this family are called PIM modes. The members of this
 family share common mechanisms, but they differ in the routing logic. There are
 situations where one mode can be better than the others.
+\nomenclature{PIM}{Protocol Independent Multicast}
 
 Every group managed by PIM has a \emph{Rendezvous-point} (RP). It is defined by
 Rendezvous-point address (RPA) assigned by local configuration. The RP is a~router
 specially configured for this purpose. Unicast delivery tree for the RPA is then
 called a \emph{RP tree}. With respect to this tree, we can define a few more terms:
+\nomenclature{RP}{Rendezvous-point}
+\nomenclature{RPA}{Rendezvous-point address}
 
 \begin{itemize}
 \item\emph{Rendezvous-point link} (RPL) is simply a link where the RPA belongs.
@@ -33,6 +37,8 @@ called a \emph{RP tree}. With respect to this tree, we can define a few more ter
   \emph{Downstream} is the opposite direction.
 \item\emph{Upstream interface} is then the RPF interface for the RPA.
 \end{itemize}
+\nomenclature{RPL}{Rendezvous-point link}
+\nomenclature{RPF}{Reverse Path Forwarding}
 
 While a unicast packet at first hops over a number of routers, then it is sent to
 its destination, multicast packets are always sent on the link directly. This
@@ -40,6 +46,7 @@ way every router on the link can hear it. In order to avoid duplicate forwards, 
 every link other than the RPL, election of a \emph{Designated Router} (DR)
 takes place. This router is responsible for distributing
 the information taken from IGMP messages to the DR on its upstream interface.
+\nomenclature{DR}{Designated Router}
 
 \pagebreak[4]
 
@@ -111,6 +118,9 @@ receivers, while PIM-DM needs to hold state for every group with sources.
 In these modes, the RP has to be an existing router and it must be running and have
 enough processing power to decapsulate traffic from all sources until multicast
 forwarding is established. Bidirectional PIM takes a different approach.
+\nomenclature{PIM-SM}{PIM Sparse Mode}
+\nomenclature{PIM-DM}{PIM Dense Mode}
+\nomenclature{PIM-BIDIR}{PIM Bidirectional Mode}
 
 \section{Bidirectional PIM}
 
@@ -125,6 +135,7 @@ just an arbitrary unicast-routable address and it is used just as the virtual ro
 distribution tree. It does not matter whether or not any router has the RPA
 assigned. Every multicast packet from any source then travels up the tree,
 being forwarded by the DFs, and then down to branches having receivers.
+\nomenclature{DF}{Designated Forwarder}
 
 \subsection{Designated forwarder election}
 

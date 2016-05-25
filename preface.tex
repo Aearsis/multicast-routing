@@ -9,6 +9,7 @@ method. Or one can send a packet to all machines in some network -- that is
 called a \emph{broadcast}. However, there are applications where both of these
 are suboptimal. A good example can be conference telephony, games or video
 streaming.
+\nomenclature{IP}{Internet Protocol}
 
 When a public television company broadcasts the final match of Olympic games, it can
 have millions of receivers. The company does not want to send every packet in
@@ -47,6 +48,7 @@ internet routing daemon. It currently supports a handful of unicast routing
 protocols, that can run at the same time. There are use-cases in which having closer communication
 between unicast and multicast routing can be an advantage. Let the primary goal of
 this thesis be to teach BIRD multicast routing.
+\nomenclature{BIRD}{BIRD Internet Routing Daemon}
 
 The protocol chosen for this thesis is PIM-BIDIR. It is a somehow simplified
 protocol from the PIM family because it doesn't need to hold state information

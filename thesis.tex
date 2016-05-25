@@ -31,6 +31,7 @@
 \usepackage{listings}
 \usepackage{enumitem}
 \usepackage{tabularx}
+\usepackage[intoc,refpage]{nomencl}
 
 \lstset{ %
   breakatwhitespace=true,
@@ -88,6 +89,8 @@ information. Multicast routing kernel interface is complicated and archaic. }
 
 \include{macros}
 
+\makenomenclature
+
 % Title page and various mandatory informational pages
 \begin{document}
 \include{title}
@@ -104,8 +107,8 @@ information. Multicast routing kernel interface is complicated and archaic. }
 \include{epilog}
 \include{bibliography}
 
-\chapwithtoc{List of Abbreviations}
-\TODO{Ask if needed, there are loads of them.}
+\renewcommand\nomname{List of Abbreviations}
+\printnomenclature[2.5cm]
 
 \chapwithtoc{Attachments}
 \TODO{Ask whether a git repo tgzipped, or just a link to some (official?) repo}
