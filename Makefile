@@ -8,6 +8,7 @@ thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib
 	bibtex thesis
 	pdflatex $<
 	pdflatex $<
+	cp thesis.pdf ~/Cloud/
 
 img/%.pdf: img/%.asy img/lib.asy
 	asy -f pdf $< -o $@
