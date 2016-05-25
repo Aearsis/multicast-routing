@@ -17,3 +17,19 @@ void node(string l, pair p, arrowbar arr = None, int dir = 1)
   draw(shift(dir*N/2) * p -- shift(dir*N) * p, arr);
   label("$" + l + "$", p);
 }
+
+import flowchart;
+
+block rtable(string name, pair p)
+{
+  block b = rectangle("\tt " + name, p, minwidth=1cm, minheight=20pt);
+  draw(b);
+  return b;
+}
+
+block proto(string name, pair p)
+{
+  block b = circle(name, p);
+  draw(b);
+  return b;
+}
