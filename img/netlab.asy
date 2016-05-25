@@ -21,7 +21,7 @@ pair computer(pair p, string name, pair align = (0, -5)) {
 
 real h = 0.6;
 
-pair rp = (0, 0.4);
+pair rp = (0, 0.35);
 
 pair r1   = router((0,0), "r1", (0, -5));
 pair r1n1 = router((-1,h), "r1n1");
@@ -42,5 +42,5 @@ draw(br0--r1--r2n2--br1);
 draw(r1--r2n1--br1--r2--recv);
 
 draw(rp--r1);
-filldraw(circle(rp, 0.17), white, black);
-label("\small $RP$", rp);
+filldraw(circle(rp, 0.1), white, black);
+label("\tiny $RP$", rp);
