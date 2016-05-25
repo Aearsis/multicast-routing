@@ -1,8 +1,6 @@
 \chapter*{Introduction}
 \addcontentsline{toc}{chapter}{Introduction}
 
-% short intro to uni/broad/multicast
-
 There are multiple ways how to use a computer network to communicate between two
 or more machines. In the most common technology, based on the Internet Protocol
 (IP), one can send a message (called a packet) from one machine, directed to
@@ -24,26 +22,27 @@ computations. One of them is routing -- collaboratively finding an optimal path
 for a packet, for some definition of optimal.
 The world of unicast routing is well inhabited. There are lots of unicast routing
 protocols based on completely different approaches. When it comes to routing
-multicasts, much is different.
+multicasts, it is much different.
 
-Multicast itself was added as an extension to IPv4 and requires special
+Multicast itself was added as an extension to IPv4 and it requires special
 handling in network hardware. When just one router on the way does not support
 it, multicast will not work. As such it suffered from a lack of support for a long
 time. And because this support was often broken, it is still not widely used.
 
 Supporting multicast on the side of the receiver is easy, and one can receive
-multicast in all current major operating systems. For example in UNIXes, it is
-a matter of a few syscalls. But routing multicast traffic is a different thing
+multicast in all current major operating systems. For example in Unix-like operating systems, it is
+a~matter of a few syscalls. But routing multicast traffic is a~different thing
 -- one needs to run a routing daemon that communicates with hosts and other
 routers, speaks at least two different network protocols and controls the
 kernel's routing tables. There already are such daemons that are traditionally
 used: \texttt{mrouted} and \texttt{pimd}.
 
-The purpose of this thesis is to explain how multicast works, introduce the reader to the world of multicast routing and implement one of existing multicast routing
-protocols. It would make no sense to implement another standalone routing
-daemon.
+The purpose of this thesis is to explain how multicast works, introduce the
+reader to the world of multicast routing and implement one of existing
+multicast routing protocols. It would make no sense to implement another
+standalone routing daemon.
 
-There once was a student project, that grew to worldwide usage -- The BIRD
+There once was a student project at MFF UK, that grew to worldwide usage -- the BIRD
 internet routing daemon. It currently supports a handful of unicast routing
 protocols, that can run at the same time. There are use-cases in which having closer communication
 between unicast and multicast routing can be an advantage. Let the primary goal of

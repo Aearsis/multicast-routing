@@ -1,46 +1,52 @@
 \chapter{BIRD Internet Routing Daemon}
 
-BIRD is a routing daemon. It does not mean that the BIRD forward the traffic
+BIRD is a routing daemon. It does not mean that the BIRD forwards the traffic
 itself, it just instructs the kernel how to do so. And how does the BIRD know?
 It speaks with other routers using routing protocols. They share information
 about the network topology and decide, which way should traffic take. Details
 on how the information is shared and the path is calculated are up to the
 specific protocol used. The BIRD currently\footnote{The latest released version
-at the time of writing is 1.6.0} supports BGP, OSPF, RIP and Babel.
+at the time of writing is 1.6.0.} supports BGP, OSPF, RIP and Babel.
 
 It is usualy enough to run only one routing protocol in your network, but there
-can be use cases when you need more protocols running, for instance in a border
+can be use cases when you need more protocols running simultaneously, for instance in a~border
 router between two network systems already using different protocols.
 
 From the user point of view, the main units are the \emph{protocol} and the
 \emph{routing table}. Routing tables are simply tables containing routes, the
 same kind of tables as those in the operating system underneath the BIRD.
 Routing tables in BIRD are kept only in its memory and the OS knows nothing
-about them. You can have how many routing tables you want, and some of them do
-not have to have corresponding table in the OS.
+about them. You can have as many routing tables as you want, and some of them do
+not have to have a~corresponding table in the OS.
 
 Protocols are instances of independent modules. Every protocol is connected
-(typically) to one routing table. Protocols can add, modify and delete entries
+(typically) to a single routing table. Protocols can add, modify and delete entries
 in routing tables, and such changes are then announced to all connected
 protocols. Different instances of one protocol, or even different protocols can
 communicate through the table and exchange routing information in a language
-both protocols understand.
+undestood by both protocols.
 
 \section{Filters}
-Every protocol-table connection has two filters attached: the \emph{import} and
-the \emph{export} filter. Every direction is from the table point of view, the
-import one controls routes going from the protocol to the table, the exportone
-controls routes going from the table to the protocol. Filter is called for
-every route and decides whether the route should be accepted or rejected.
+Every protocol-table connection has two \emph{filters} attached: the
+\emph{import} and the \emph{export} filter. They are named from the point of
+view of a table. The import filter controls routes going from the protocol to
+the table, the export filter controls routes going from the table to the
+protocol. The filter is called for every route and it decides whether the route
+should be accepted or rejected.
 
-Default filters also show the most basic behavior. Import filter is by default
-\texttt{all}, which means every route is accepted. Export filter is
+Default filters also show the most basic behavior. The import filter is by default
+\texttt{all}, which means every route is accepted. The export filter is
 \texttt{none} by default, causing every route to be rejected. This default
 behavior is the reason why the BIRD does not magically work out of the box,
 because running protocol instance have no knowledge of the network topology,
 thus no information to share.
 
-\section{Not-routing protocols}
+Before accepting the route, filters may also modify the route's attributes.
+This mechanism is targeted to, but not limited to, setting route's metrics
+while transfering the route between different protocols. But you can do almost
+anything with the route, including, e.g., changing the next hop.
+
+\section{Non-routing protocols}
 Routing protocols often have some method to detect a neighbor failure using
 some form of hello messages. But these often have long reaction period in the
 order of tens of seconds. A protocol named BFD tries to provide faster, low
@@ -51,12 +57,12 @@ advertise an available network prefix allowing hosts to autoconfigure.
 
 \section{Special protocols}
 Nothing from what we have discussed communicates with the kernel, yet protocols
-and tables are all what the BIRD is made of. The synchronization of BIRDs
-tables with the kernel routing table is made through a special protocol,
+and tables are all what the BIRD is made of. The synchronization of BIRD's
+tables with the kernel routing table is made through a special protocol
 called, suprisingly, \texttt{kernel}. The kernel protocol behaves like an usual
-protocol, and is connected to one table through some filters. Every route it
+protocol, and it is connected to one table through some filters. Every route it
 receives propagates to the kernel, and every route from the kernel is announced
-back. On systems where there can be more than one routing table (e.g. Linux),
+back. On systems where there can be more than one routing table (e.g., Linux),
 you have to run a separate instance of the kernel protocol for each. The
 scanning is done periodically. Do not forget to set the export filter for
 kernel protocol to something more sensible than \texttt{none}.
@@ -67,26 +73,26 @@ Unless you have a very specific setup, this protocol is needed because other
 protocols need to know what devices do they have under control.
 
 Three more special protocols are implemented. You can specify some routes in
-the configuration, then the \texttt{static} protocol will add them to the BIRDs
-tables. The \texttt{pipe} connects two tables and copies routes between
+the configuration, then the \texttt{static} protocol will add them to the BIRD's
+tables. The \texttt{pipe} connects two tables and it copies routes between
 them. Of course, this is useful only with filters, otherwise you could have
-just used only one table. Last, the \texttt{direct} protocol generates routes
-that directly belong to some interface. That is useful, when your operating
-system cannot track route origin and would allow the BIRD to permanently
+just used only one table. Finally, the \texttt{direct} protocol generates routes
+that directly belong to some interface. That is useful when your operating
+system cannot track route origin and it would allow the BIRD to permanently
 overwrite these routes. This is the case for BSD, on Linux the BIRD cannot
 change routes from other sources.
 
 \section{IP agnosticity}
-The creators of the BIRD have made a decision, that the BIRD will be able to
-route IPv4 and IPv6, but not at the same time. The choice is made during
-compilation, and a bunch of macro definitions will compile the BIRD either for
+When BIRD was initially designed, its creators decided that the it will be able to
+route both IPv4 and IPv6, but not at the same time. The choice is made during
+compilation and a bunch of macro definitions will compile the BIRD either for
 IPv4, or for IPv6. If you have a dual-stack network, you have to run both BIRDs
-at the same time, and configure them separately.
+at the same time and configure them separately.
 
 This choice is good because of performance and memory reasons. Internal
-structures can be optimized for the address length, which means they can be
-narly four times faster and lighter for IPv4. However, nowadays it is usual to
-have tunnels mixing both internet protocols together, and a routing daemon must
+structures can be optimized for the given address length, which means they can be
+nearly four times faster and lighter for IPv4. However, nowadays it is usual to
+have tunnels mixing both internet protocols together and a routing daemon must
 be able to route IPv6 traffic in a tunnel over IPv4 network. That is one of the
 reasons the BIRD team have chosen to make a big change and generalize internal
 structures to run both versions at the same time.
@@ -97,6 +103,12 @@ are generalized and called \texttt{channels}. A protocol can have any number of
 channels of any type, thus receive route updates from more tables. PIM heavily
 uses this, because it is connected to three tables all the time.
 
+Having two IP versions in one daemon introduces differences between routing
+tables. Every routing table has a type attached, and channels can usualy work
+only with specific table types. The default routing table for the type
+\ttt{ipv4} is the table \ttt{master4}. The notation will be important in the
+configuration.
+
 \section{Configuration}
 Because of channels and IP agnosticity, configuration differs between the
 latest released version of BIRD and the version my work is based on. As I would
@@ -104,30 +116,36 @@ like to give configuration samples in the following chapters, it wouldn't make
 much sense to give them for a different version. But this configuration files
 will not work in the officially released BIRD 1.6.0.
 
-Let us have a look at some simple configuration file:
+Let us have a look at a simple configuration file:
+
 \lstinputlisting{cfg/simple.cfg}
 
-This is the most basic configuration actually doing something. We can see the
+\noindent This is the most basic configuration actually doing something. We can see the
 definition of a kernel protocol, scanning kernel routing table every 20 seconds
-for new routes, and exporting every route from BIRDs main table to the kernel.
-Next to it is the device protocol, set to scan every 10 seconds. Then we're
-running RIP, filtering no route out. That means RIP will get all routes read
+for new routes. The only channel \ttt{ipv4} of the kernel protocol have the
+export filter set to \ttt{all}, exporting every route from BIRD's routing table
+\ttt{master4} to the kernel. Next to it is the device protocol, set to scan
+every 10 seconds. Then we run the RIP protocol, filtering no route out. That
+means RIP will get all routes read
 from kernel, exchange them with its neighbors, and put new routes into the main
-table. It will communicate on any interface given. Everything for IPv4 only.
-Let's try something more interesting, omitting the kernel and device protocol:
+table. It will communicate on all available interfaces.
+
+\clearpage
+
+\noindent Let's try something more interesting, omitting the kernel and device protocol:
 
 \lstinputlisting{cfg/rip_ospf.cfg}
 
-Using natural language, these directives are very easily readable and
+\noindent Using natural language, these directives are easily readable and
 self-explanatory. There are multiple levels of messages in the log, and
 especially the level \texttt{trace} has categories; \texttt{debug packets}
 will turn on debug messages about packets for the RIP protocol. The RIP will
-run only on interfaces with name starting with "eth", and its routes will be
+run only on interfaces with name starting with~``eth'', and its routes will be
 taken into account only when having RIP metric under 10.
 
 OSPF configuration defines the backbone area, spanning over the device's wlan
 interfaces. The static protocol defines some routes, we can see an usual route
-having next hop, blackhole route, which means every packet chosing this route
+having next hop, a blackhole route, which means every packet chosing this route
 will get silently dropped, and a recursive route, where the next hop is the
 same as the next hop for IP \ip{192.168.0.42}.
 
@@ -135,11 +153,11 @@ same as the next hop for IP \ip{192.168.0.42}.
 \label{bird-internals}
 The overall architecture can be called event-driven. When you implement a new
 protocol, you register hooks to be called when there is an interface status
-change, route update, protocol is about to be shut down, reconfigured and so on.
+change, route update, protocol is about to be shut down, reconfigured, and so on.
 The most interesting hooks can be registered on sockets and timers.
 
-BIRD sockets are a thin layer over traditional UNIX sockets. They try to hide
-incompatibilities between diferent UNIXes by providing system-dependent
+BIRD sockets are a thin layer over traditional Unix sockets. They try to hide
+incompatibilities between diferent Unixes by providing system-dependent
 implementation. But the main benefit of them is simplified receiving and
 sending packets using hooks.
 
@@ -147,7 +165,7 @@ What might be suprising, BIRD is single-threaded. It has only one IO loop that
 dispatches these hooks. That means you do not have to mess with locking in the
 common code, but it comes with a few drawbacks. In the loop, there is
 a \texttt{select} syscall waiting on all sockets. Whenever there are some data
-waiting, BIRD calls \verb|rx_hook| on that socket.
+waiting, BIRD calls a \verb|rx_hook| on that socket.
 
 Another very common usage pattern in network protocols are timers. You often
 need to send a message every ten seconds, or let something timeout. It would be
@@ -160,7 +178,7 @@ until the first timer should be fired.
 When doing some computations that can take a long time, for example going
 through a complete routing table, you cannot do it in single hook as there can be
 other, possibly time sensitive, protocols waiting for their time. A mechanism
-called events was made for this purpose. Event can be \emph{scheduled},
+called events was made for this purpose. An event can be \emph{scheduled},
 and its hook will run at the end of current IO loop cycle. It is recommended to
 split such long-running pieces of code into several event calls, simulating
 multiple threads running with less overhead than actually having them.
@@ -169,35 +187,35 @@ Because there are computations in the IO loop that can take longer time, it is
 not possible to have precise timers. For that reason, internal timers had the
 precision of one second. When a timer is delayed by two seconds, it does not
 matter much when it was set to ten seconds. But the same delay introduced to
-a few millisecond timer can be critical.
+a few-millisecond timer can be critical.
 
 Traversing over a routing table spread over more iterations of the main IO loop
-brings several problems. When any event is called in between, you have to deal
+brings several problems. When any event is called inbetween, you have to deal
 with added entries, removed entries (especially the current one being removed),
 and complete rehashes of the table. Routing table is stored in clever hash
 table called FIB, \emph{Forwarding Information Base}. This table follows
 a special property making elements keep their relative order when the table is
 rehashed. Furthermore, every node keeps a list of iterators, and when the node
-is removed, it moves all iterators to the next element.
+is removed, all its iterators are moved to the next element.
 
 \subsection{Resources}
 Common software problem, dangeorus especially for daemons, is memory leakage.
 When writing network software, one often needs to allocate temporary structures
-for holding additional information tied to interface, neighbor or network
-prefix. It can happen and often happens, that you lose all handles to allocated
+for holding additional information tied to an interface, neighbor or a network
+prefix. It can happen and often happens that you lose all handles to allocated
 memory and you cannot deallocate it. This forgotten memory cummulates over time
-and memory usage of your daemon grows. When it overgrowths the limited memory
+and memory usage of your daemon grows. When it overgrows the limited memory
 in embedded devices, your daemon is killed.
 
 BIRD tries to fight (not only) this problem with dedicated mechanisms for
-memory allocations. There is one, root, memory pool. Pools can have another
-pools inside. For example, every protocol instance has its own pool. When the
-protocols shuts down, its pool is completely deallocated, leaving no room for
-memory leakage.
+memory allocations. There are several memory pools from which resources are
+allocated. You can then deallocate either the resources one by one, or the
+whole pool at once. For example, every protocol instance has its own pool,
+which is freed when the instance is shut down.
 
 This mechanism has more advantages. Every resource type can have its destructor
 specified, so it can remove itself from lists, free related memory and so. To
-give an example, timers has their own resource type, and when a timer is freed
+give an example, timers has their own resource type, and when a timer is freed,
 it removes itself from the list of upcoming timers. Or, when a socket is
 closed, it deallocates its buffers.
 
@@ -205,19 +223,18 @@ Resource pools offer multiple memory allocation strategies, making them more
 efficient. BIRD offers memory blocks (the usual strategy similar to
 malloc/free), linear memory pool and Slabs. Linear memory pools are handy when
 creating a temporary structure (which will be freed as a whole after using).
-Slabs are efficient in managing a lot of fixed size blocks, for example the FIB
-nodes.
+Slabs are efficient in managing a lot of fixed-size blocks, e.g., the FIB nodes.
 
 \subsection{System dependent parts}
-Routing daemon, whether we want or not, does have to communicate tightly with
-the kernel. The BIRD is written with all UNIX-like operating systems in mind,
+A routing daemon, whether we want or not, does have to communicate tightly with
+the kernel. The BIRD is written with all Unix-like operating systems in mind,
 and it was originally developed at least for Linux and BSD. However, the
 development of last years is strongly focused on Linux only.
 
 To avoid having a lot of compile-time checks and conditionally compiled blocks,
 BIRD has a source code subtree, which is linked according to the target
 operating system. This subtree is called \ttt{sysdep}. There are parts which
-are special for Linux or BSD, but alos parts common for all UNIXes. The
+are special for Linux or BSD, but also parts common for all Unixes. The
 creators of BIRD wanted to make porting to different operating systems as
 simple as possible.
 
@@ -227,8 +244,10 @@ but also the whole implemetation of the main IO loop. If you look into the
 forbidden lands of the kernel protocol, you will find arcane magic.
 
 \section{The user interface}
-To communicate with the running daemon, BIRD provides a shell-like utility,
-\ttt{birdc}. You can commands to examine the routing tables, dump protocol
+To communicate with the running daemon, the BIRD opens a control socket, and offers
+a well-defined protocol which you can use to control the running daemon. To
+make it actually usable, the BIRD is provided with a shell-like utility,
+\ttt{birdc}. You can run commands to examine the routing tables, dump protocol
 information or to change the configuration on-the-fly by disabling and enabling
 protocol instances. The client needs to open a connection to the control
 socket, and therefore you usually have to run it with the root privileges.
@@ -236,5 +255,5 @@ socket, and therefore you usually have to run it with the root privileges.
 When you update the configuration, it is possible to reload it to the running
 daemon without losing routing tables in the memory. BIRD tries to avoid
 restarting as much as possible. There are mechanisms how to reconfigure
-a running protocol, how to restart it without losing its routes or how to
+a running protocol, how to restart it without losing its routes, or how to
 restart only those protocols that changed too much.

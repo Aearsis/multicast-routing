@@ -1,74 +1,78 @@
 \chapter{Protocol Independent Multicast}
 
 Unicast routing protocols try to build a tree for every destination network
-cooperatively. This tree is a  spanning tree over some graph of networks and it
+cooperatively. This tree is a spanning tree over some graph of networks and it
 is rooted at its destination. We can call it the shortest-path tree in respect
 to the destination. Every packet travels up the tree until it reaches its
-destination.
+destination. Alternatively, you can imagine them building a shortest-path
+delivery tree for every source, rooted at the source, with traffic travelling
+down the tree. This is what OSPF builds.
 
 Multicast packets have no single destination, so multicast routing protocols
 have to take a slightly different approach. For every multicast group, they still
-try to build a tree connecting all sources and listeners of traffic. Multicast
+try to build a tree connecting all traffic sources and receivers. Multicast
 routing protocols often reuse the unicast routing topology to create the
 multicast routing information base (MRIB).
 
-Protocol Independent Multicast, PIM, is a whole family of multicast routing
-protocols. Different protocols under PIM are called modes. Members of this
-family share common mechanisms, but differ in the routing logic. There are
+Protocol Independent Multicast (PIM) is a whole family of multicast routing
+protocols. Different protocols in this family are called PIM modes. The members of this
+family share common mechanisms, but they differ in the routing logic. There are
 situations where one mode can be better than the others.
 
-Every group managed by PIM has its \emph{Rendezvous-point} address (RPA)
-associated. Assigning it is a matter of local configuration. RP is a router
-specially configured for this purpose. Unicast delivery tree for RPA is then
-called \emph{RP tree}. With respect to this tree we can define a few more terms:
+Every group managed by PIM has a \emph{Rendezvous-point} (RP). It is defined by
+Rendezvous-point address (RPA) assigned by local configuration. The RP is a~router
+specially configured for this purpose. Unicast delivery tree for the RPA is then
+called a \emph{RP tree}. With respect to this tree, we can define a few more terms:
 
 \begin{itemize}
-\item\emph{Rendezvous-point link} (RPL) is simply a link where RP address belongs.
+\item\emph{Rendezvous-point link} (RPL) is simply a link where the RPA belongs.
   It is the root of the RP tree.
-\item\emph{Reverse Path Dorwarding Interface} (RPF interface) with respect to
+\item\emph{Reverse path forwarding interface} (RPF interface) with respect to
   an address is the next-hop interface. RPF neighbor is the next-hop router.
-\item\emph{Upstream} is the direction towards RPA, up the RP tree.
-  \emph{Downstream} is the opposite one.
-\item{Upstream interface} is then RPF interface for RPA.
+\item\emph{Upstream} is the direction towards the RPA, up the RP tree.
+  \emph{Downstream} is the opposite direction.
+\item\emph{Upstream interface} is then the RPF interface for the RPA.
 \end{itemize}
 
-While unicast packet at first hops over a number of routers, then it is sent to
+While a unicast packet at first hops over a number of routers, then it is sent to
 its destination, multicast packets are always sent on the link directly. This
 way every router on the link can hear it. In order to avoid duplicate forwards, on
-every link other than the RPL election takes place. The winning router is called
-\emph{designated router}. The designated router is responsible for distributing
-the information taken from IGMP messages to DR on its upstream interface.
+every link other than the RPL, election of a \emph{Designated Router} (DR)
+takes place. This router is responsible for distributing
+the information taken from IGMP messages to the DR on its upstream interface.
 
-This is information is distributed using PIM \emph{Join/Prune} messages. This
-mechanism is almost reimplementation of IGMPv2 in PIM context. When there is
-a host on link which joined group $G$ by IGMP or any router that joined $G$ by
-PIM, DR joins $G$ on its upstream. Let us clear the notation for joins and prunes:
+\pagebreak[4]
+
+This information is distributed using PIM \emph{Join/Prune} messages. This
+mechanism is almost a reimplementation of IGMPv2 in PIM context. When there is
+a host on the link which joined a group $G$ by IGMP, or any router that joined~$G$ by
+PIM, the DR joins $G$ on its upstream. Let us clarify the notation for joins and prunes:
 
 \begin{itemize}
   \item join$(S, G)$ joins the source-specific tree for source $S$ and group $G$.
   \item join$(*, G)$ joins the shared RP tree for RPA$(G)$ and group $G$.
-  \item join$(*, *, RPA)$ joins the shared RP tree for a RPA given. This shared
-    tree is used for groups without their own state.
+  \item join$(*, *, RPA)$ joins the shared RP tree for a RPA given, effectively
+    joining every group with this RPA.
 \end{itemize}
 
 \begin{figure}[htp]
 \centering
 \includegraphics[scale=1.00]{img/rp-tree.pdf}
-\caption{Example RP tree}
+\caption{An example RP tree}
 \label{rp-tree}
 \end{figure}
 
-Let me first explain briefly how PIM Sparse Mode works. Suppose there is
-already a RP tree built for group $G$, with some receivers that joined~$(*,G)$.
-One such network can be seen on the figure \ref{rp-tree}.
-Suddenly node $S$ starts sending multicast packets on a link. Then DR on
-this link ($A$, also called first-hop router) takes these packets and
+Let us first explain briefly how PIM Sparse Mode works. Suppose there is
+already a RP tree built for a group $G$ with some receivers that joined~$(*,G)$.
+One such network can be seen on figure \ref{rp-tree}.
+Suddenly node $S$ starts sending multicast packets on a link. The DR on
+this link ($A$, also called the first-hop router) takes these packets and
 encapsulates them into ordinary unicast packets -- PIM Register messages. These
 are then sent to the acting RP. The encapsulation is done by the routing
-daemon. On BSD and Linux the PIM daemon creates a virtual interface, where the
+daemon. On BSD and Linux, the PIM daemon creates a~virtual interface, where the
 kernel forwards unroutable multicast packets.
 
-Incoming register packets are decapsulated by the RP, which then temporarily
+Incoming Register packets are decapsulated by the RP, which then temporarily
 distributes them downstream. Routers are responsible for picking packets coming
 on upstream and forwarding them down on links where they are acting as
 designated routers according to the shared tree for $G$.
@@ -77,10 +81,10 @@ In the example, traffic between $S$ and $R$ flows from $S$ to $A$, then
 encapsulated in register messages over $B$ to $RP$, then as multicast over $C$
 and $D$ to $R$.
 
-In the meantime, RP initiates Join for $(S, G)$, which creates distribution
+In the meantime, RP initiates a Join for $(S, G)$, which creates a distribution
 tree for $G$ rooted at $S$. After all routers in between $A$ and RP joins the
 source tree, packets will be forwarded from $A$ to RP naturally. At that time
-RP starts to discard register packets and will send a Register-Stop message to
+RP starts to discard Register packets and it sends a Register-Stop message to
 $A$. Encapsulating is then stopped and the traffic will flow as usual. So, now
 the traffic follows the $(S,G)$ tree from $S$ to the RP, then the $(*,G)$ tree
 down to all receivers.
@@ -88,24 +92,23 @@ down to all receivers.
 \begin{figure}[htp]
 \centering
 \includegraphics[scale=1.00]{img/source-tree.pdf}
-\caption{The same network with (S, G) tree}
+\caption{The same network with a $(S,G)$ tree}
 \label{sg-tree}
 \end{figure}
 
-Eventually, for a receiver $R$, DR on $R$'s link will send a $(S, G)$ join.
+Eventually, for a receiver $R$, the DR on $R$'s link will send a $(S, G)$ join.
 This join will propagate towards $S$ until reaching first router with $(S,G)$
-state. It that time the receiver joins the source specific tree for $(S,G)$ and
-packets use the shortest path from $S$ to $R$. The situation is then similar to
-the figure \ref{sg-tree}. Traffic uses the shortcut and flows as multicast
+state. It that time the receiver joins the source-specific tree for $(S,G)$ and
+the packets use the shortest path from $S$ to $R$. The situation is then similar to
+figure \ref{sg-tree}. Traffic uses the shortcut and it flows as multicast
 directly from $S$ over $E$ and $F$ to $R$.
 
 PIM Sparse Mode and PIM Dense Mode differ in their default downstream behavior.
 While PIM-SM requires receivers to explicitly join, PIM-DM floods everything
 over the RP tree by default. Branches without receivers are pruned afterwards.
-The difference is, that PIM-SM requires state information for every group with
-receivers, PIM-DM needs to hold state for every group with sources.
-
-In these modes, RP has to be an existing router and must be running and have
+The difference is that PIM-SM requires state information for every group with
+receivers, while PIM-DM needs to hold state for every group with sources.
+In these modes, the RP has to be an existing router and it must be running and have
 enough processing power to decapsulate traffic from all sources until multicast
 forwarding is established. Bidirectional PIM takes a different approach.
 
@@ -113,73 +116,73 @@ forwarding is established. Bidirectional PIM takes a different approach.
 
 Everything is made a bit simpler when we do not expect building specific trees
 for every source. Routers can have a lot smaller routing tables and even build
-them proactively. No encapsulating is then needed and processing power is
+them proactively. No encapsulation is then needed and processing power is
 spared. Let us first clarify terms in the context of PIM-BIDIR.
 
-Designated router is called the designated forwarder (DF) and takes additional
-responsibilities. There are differences in how the election works. RP can be
-just an arbitrary unicast routable address, and is used just as the virtual root of the
-distribution tree. It does not matter whether or not any router has RPA
+Designated router is called the \emph{designated forwarder} (DF) and it takes additional
+responsibilities. There are differences in how the election works. The RPA can be
+just an arbitrary unicast-routable address and it is used just as the virtual root of the
+distribution tree. It does not matter whether or not any router has the RPA
 assigned. Every multicast packet from any source then travels up the tree,
-being forwarded by DFs, and then down to branches having receivers.
+being forwarded by the DFs, and then down to branches having receivers.
 
 \subsection{Designated forwarder election}
 
-Every router running PIM-BIDIR knows from MRIB what its upstream interface is,
-and its metric towards RP. Router cannot be DF on its upstream link, so
-whenever it sends an offer, advertises infinite metric. Election never takes place
-on RPL, because it is the upstream link for every router.
+Every router running PIM-BIDIR knows from the MRIB what its upstream interface is,
+and its metric towards RP. Router cannot be a DF on its upstream link, so
+whenever it sends an offer, it advertises an infinite metric. Election never takes place
+on the RPL, because it is the upstream link for every router.
 
-There are four types of messages in the election: Offer, Winner, Backoff and
+There are four types of messages in the election: Offer, Winner, Backoff, and
 Pass. Routers advertise their metrics as pairs of (protocol preference, distance).
 The state machine with all details is described in \rfc{5015}. The main idea of the
-election is that every router advertises it's metric in Offer messages. When
-a router hears better Offer, it remains silent for a while. If not, after
+election is that every router advertises its metric in Offer messages. When
+a router hears a better Offer, it remains silent for a while. If it does not, after
 advertising its metric three times, it claims itself a winner. Winning is
-announced by Winner messages, and every other router notes sender as the
+announced by Winner messages, and every other router notes the sender as the
 winner and remembers its metric.
 
-Two noteworthy events may happen. If winner changes its metric to worse value,
+Two noteworthy events may happen. If the winner changes its metric to a worse value,
 it reannounces itself as a winner. When any other router has a better metric,
-replies with an Offer immediately. Similarly, when losing router changes its
-metric to be better than winner's, it sends an Offer.
+it replies with an Offer immediately. Similarly, when a losing router changes its
+metric to be better than the winner's, it sends an Offer.
 
-When metric changes at one router, it is often a reaction to some router losing
-link and means this change will propagate to other routers, changing their
-metric too. In order to spare bandwidth, current winner reacts to better offer
-with a Backoff message. It instructs target router to wait a while until
-unicast routing stabilizes. After a short period without other Offers, winner
-passes DF role in Pass message.
+When the metric changes at one router, it is often a reaction to some router losing its
+link and it means that this change will propagate to other routers, changing their
+metrics too. In order to spare bandwidth, the current winner reacts to a better offer
+with a~Backoff message. It instructs the target router to wait for a while until
+unicast routing stabilizes. After a short period without other Offers, the winner
+passes the DF role in a Pass message.
 
 In the ideal conditions, there would be exactly one DF on every link. There are
 situations, where no DF is elected, for example when all paths to the RPL are
-lost. Then every node advertises infinite metric, and no router is elected
+lost. Then every node advertises an infinite metric, and no router is elected
 winner. Also, when the DF fails silently, other nodes know only after few
-missing hello messages. For the period in between no router is the DF.
+missing hello messages. For the in-between period, no router is the DF.
 
-Much worse would be if there were two DF's on a link. The election protocol
-is biased to the safe side. For instance, old DF sending a Pass immediately
-stops being DF, even if all Pass messages were to be lost. Even when they are
+Much worse would be if there were two DFs on a link, that would lead to routing loops. The election protocol
+is therefore biased to the safe side. For instance, an old DF sending a Pass immediately
+stops being a DF, even if all Pass messages were to be lost. Even when they are
 delivered, there is a short period without any router forwarding.
 
 \subsection{Packet forwarding}
 
-Suppose source $S$ starts transmitting packets on its link $L_0$. Then
-currently acting DF will forward them immediately to its upstream link $L_1$.
-DF on $L_1$ forwards it to its upstream, $L_2$, and so on. This is repeated
-until the packet reaches RPL. As there is no DF on the RPL, forwarding upstream stops
+Suppose a source $S$ starts transmitting packets on its link $L_0$. Then
+the currently acting DF will forward them immediately to its upstream link $L_1$.
+The DF on $L_1$ forwards them to its upstream, $L_2$, and so on. This is repeated
+until the packet reaches the RPL. As there is no DF on the RPL, forwarding upstream stops
 there.
 
-Simultaneously, all routers listen for packets on their upstream links, and
-forwards packets from there to links where they are acting DFs. This way packet
+Simultaneously, all routers listen for packets on their upstream links, and they
+forward packets from there to links where they are acting DFs. This way, apacket
 is forwarded from $L_0, L_1, \dots$ in the reverse direction -- downstream.
-Downstream forwarding is conditioned by having listeners active. Upstream
-forwarding needs to be done even when there are no listeners.
+Downstream forwarding is conditioned on having receivers active. Upstream
+forwarding needs to be done even when there are no receivers.
 
 You can see that every DF can forward packets for one group upstream and
-downstream at the same time, explaining the name "Bidirectional".
+downstream at the same time, explaining the name ``Bidirectional''.
 
 As opposed to other PIM modes, there is no need to encapsulate packets, thus
-there is no different behavior on the first-hop router. Also, RPA does not have
-to be assigned to any router. This means every router behaves the same no
+there is no different behavior on the first-hop router. Also, the RPA does not have
+to be assigned to any router. This means that every router behaves the same, no
 matter where in the tree it is, simplyfing the overall protocol design.

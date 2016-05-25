@@ -1,22 +1,22 @@
 \chapter{Testing}
 
-An important part of development is testing. It is hard to test network
+An important part of development is testing. It is hard to test a network
 protocol, because a lot of code depends on the network state and temporary
 conditions. Also, especially for testing routing protocols, you need multiple
 networks, and run more than one instance of the routing daemon.
 
 There are several tools that can virtualize network topology. Most of them are
 based on virtual machines or containers. This is useful for configuration or
-performance testing, but not that much for development. We've created
-a lightweight testing framework based on Linux network namespaces to suit our
+performance testing, but not that much for development, so we have created
+a~lightweight testing framework based on Linux network namespaces to suit our
 needs.
 
 While developing the multicast routing features, we continuously tested it in
 various testing environments, targeting the concrete feature being developed.
-The IGMP implementation is tested agains Linux kernel, which works as the IGMP
+The IGMP implementation is tested against Linux kernel, which works as the IGMP
 host.
 
-More complicated situation is with the PIM protocol, because we haven't
+It is more complicated with the PIM protocol, because we haven't
 found any software solution doing the bidirectional variant of PIM. There are
 routers from Cisco or Juniper which are able to manage a group in bidirectional
 mode, but we haven't been provided any to test our implementation against it.
@@ -27,7 +27,11 @@ correctly against itself.
 
 \section{Netlab}
 Our testing framework is called the \emph{netlab}. It is published in its
-separate repository on Github\footnote{https://github.com/Aearsis/netlab}.
+separate repository on Github.\footnote{https://github.com/Aearsis/netlab}
+It is inspired by the testing workflow of the BIRD team members. They were
+already using network namespaces with a collection of scripts. We have decided
+to clean up the scripts and give them an interface. New ideas to simplify the
+development came soon after.
 
 To use this framework, you must clone the repository into the root of the BIRD
 repository, or change the path to BIRD inside the main executable of netlab.
@@ -38,9 +42,12 @@ $ sudo netlab/netlab
 [netlab] # net_up
 [netlab] # start
 [netlab] # log r1
+[netlab] # restart r1
+[netlab] # stop
+[netlab] # net_down
 \end{lstlisting}
 
-You can describe the testing network using a simple declarative language. For
+\noindent You can describe the testing network using a simple declarative language. For
 example, a setup running two BIRDs connected directly by an Ethernet cable:
 
 \begin{lstlisting}
@@ -51,19 +58,32 @@ netlab_node r2
 if_veth r1 r2 10.10.1
 \end{lstlisting}
 
-It is very simple to add bridges, dummy nodes representing subnets, or to
-create a namespace where to run other programs sending and receiving multicat
+\noindent It is very simple to add bridges, dummy interfaces representing subnets, or to
+create a~namespace where to run other programs sending and receiving multicat
 packets. This is the network we've done the most of the testing on:
 
 \begin{figure}[htp]
 \centering
-\vskip 10cm
-\caption{\TODO{The network scheme}}
-\label{pim-channels}
+\includegraphics[scale=1.00]{img/netlab.pdf}
+\caption{The network scheme we tested on}
+\label{netlab}
 \end{figure}
 
+Moreover, every node has a dummy subnet, which is not drawn on the scheme.
+This is a very simple network, but you can test a lot of things there. The DF
+election is interesting at the \ttt{br1}, because \ttt{r2n1} and \ttt{r2n2}
+have the same metric. If you send packets from the \ttt{send} node, you should see
+a traffic on the \ttt{br0}, but not on the dummy subnet at \ttt{r1n2}.
+
+Currently, the netlab uses deterministic names. When the node name is
+\ttt{node}, then a namespace \ttt{netlab-node} will be created. When you define
+an ethernet pair from \ttt{r1} to \ttt{r2}, then it will create an interface
+\ttt{veth-r2} in the \ttt{netlab-r1} namespace, and \ttt{veth-r1} in the
+\ttt{netlab-r2} namespace. This naming convention is very conventional, you can
+see immediately to which node is the interface connected.
+
 \section{Testing multicast}
-To actually test the multicast forwarding, we have used simple python scripts.
+To actually test the multicast forwarding, we have used simple Python scripts.
 
 \begin{lstlisting}[language=python]
 #!/usr/bin/env python
@@ -98,18 +118,21 @@ send('224.42.42.42', 42000, "What hath god wrought!");
 recv('224.42.42.42', 42000)
 \end{lstlisting}
 
-For example, running the send script in the \ttt{send} namespace in the setup
+\noindent For example, running the send script in the \ttt{send} namespace in the setup
 above, the script joins a group and then starts multicasting a lot of messages.
-If run a packet sniffer, for example \ttt{tcpdump}. you should see the traffic
+If you run a~packet sniffer, for example \ttt{tcpdump}, you should see the traffic
 travelling upstream, stopping at the RPL. When you run the receiving script in
 the \ttt{recv} namespace, messages should start coming. You can use the netlab
 for this purpose:
 
 \begin{lstlisting}
 [netlab] # shell send
-[netlab send] # ./send.py
+[netlab send] # ./send.py &
+[netlab send] # disown && exit
+[netlab] # shell r1
+[netlab r1] # tcpdump -i veth-br0
 \end{lstlisting}
 
-When testing, please be aware that PIM needs a path to the RP to work. In the
+\noindent When testing, please be aware that PIM needs a path to the RP to work. In the
 testing environment an OSPF instance is taking care of this, and it can take
-a minute to initialize.
+a~minute to initialize

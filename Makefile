@@ -1,6 +1,6 @@
 all: thesis.pdf
 
-thesis.pdf: img/rp-tree.pdf img/source-tree.pdf
+thesis.pdf: $(patsubst %.asy, %.pdf, img/*.asy)
 
 # LaTeX must be run multiple times to get references right
 thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib
