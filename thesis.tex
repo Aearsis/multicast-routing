@@ -65,19 +65,25 @@
 % An optional dedication: you can thank whomever you wish (your supervisor,
 % consultant, a person who lent the software, etc.)
 \def\Dedication{%
-	\TODO Dedication.
-	\TODO{Cisco Network Icons}
+  I would like to thank Ondřej `Santiago' Zajíček from the CZ.NIC association
+  for giving me directions on the topic and quickly cutting the dead ends, and
+  my supervisor Martin Mareš for many interesting discussions.
 }
 
 % Abstract (recommended length around 80-200 words; this is not a copy of your thesis assignment!)
 \def\Abstract{%
-\TODO{Tůůůůůůůůůůůů Důůůůůůůůůůůů!!!}
-There are multiple approaches to multicast routing in IPv4 networks. BIDIR-PIM
-is the only protocol in PIM family that doesn't have to hold source specific
-information. Multicast routing kernel interface is complicated and archaic. }
+  We implement multicast routing in the BIRD routing daemon.
+  At first, we review basic principles of IP multicast and different
+  modes of the PIM multicast routing protocol.
+  Then we outline the architecture of the BIRD and discuss its aspects
+  related to our goal. We present our solution based on adding IGMP,
+  bidirectional PIM, and kernel interface as three separate BIRD protocols.
+  Finally, we describe our framework for testing network software
+  in complex virtual networks.
+}
 
 \def\Keywords{%
-	{multicast} {routing} {bird} {unix}
+  {multicast routing}, {BIRD}, {PIM}, {networking}
 }
 
 \usepackage[pdftex,unicode]{hyperref}   % Must follow all other packages
