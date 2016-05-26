@@ -5,14 +5,15 @@ itself, it just instructs the kernel how to do so. And how does the BIRD know?
 It speaks with other routers using routing protocols. They share information
 about the network topology and decide, which way should traffic take. Details
 on how the information is shared and the path is calculated are up to the
-specific protocol used. The BIRD currently\footnote{The latest released version
-at the time of writing is 1.6.0.} supports BGP, OSPF, RIP and Babel. All the information about BIRD can be found on its webpage \cite{birdweb}.
+specific protocol used. The BIRD currently, in version 1.6.0, supports BGP,
+OSPF, RIP and Babel. All the information about BIRD can be found on its webpage
+\cite{birdweb}.
 \nomenclature{BGP}{Border Gateway Protocol}
 \nomenclature{OSPF}{Open Shortest Path First}
 \nomenclature{BGP}{Routing Information Protocol}
 
-It is usualy enough to run only one routing protocol in your network, but there
-can be use cases when you need more protocols running simultaneously, for instance in a~border
+It is usually enough to run only one routing protocol in your network, but there
+can be use cases when you need more protocols running simultaneously. For instance, in a~border
 router between two network systems already using different protocols.
 
 From the user point of view, the main units are the \emph{protocol} and the
@@ -56,7 +57,7 @@ order of tens of seconds. A protocol named BFD tries to provide faster, low
 overhead failure detection. It serves as an advisor to other protocols.
 \nomenclature{BFD}{Bidirectional Forwarding Detection}
 
-Another protocol implemented in the BIRD is RAdv. It is used by IPV6 routers to
+Another protocol implemented in the BIRD is RAdv. It is used by IPv6 routers to
 advertise an available network prefix allowing hosts to autoconfigure.
 \nomenclature{RAdv}{Router Advertisement}
 
@@ -109,16 +110,16 @@ channels of any type, thus receive route updates from more tables. PIM heavily
 uses this, because it is connected to three tables all the time.
 
 Having two IP versions in one daemon introduces differences between routing
-tables. Every routing table has a type attached, and channels can usualy work
+tables. Every routing table has a type attached, and channels can usually work
 only with specific table types. The default routing table for the type
 \ttt{ipv4} is the table \ttt{master4}. The notation will be important in the
 configuration.
 
 \section{Configuration}
 Because of channels and IP agnosticity, configuration differs between the
-latest released version of BIRD and the version my work is based on. As I would
+latest released version of BIRD and the version my work is based on. As we would
 like to give configuration samples in the following chapters, it wouldn't make
-much sense to give them for a different version. But this configuration files
+much sense to give them for a different version. But these configuration files
 will not work in the officially released BIRD 1.6.0.
 
 Let us have a look at a simple configuration file:
@@ -150,7 +151,7 @@ taken into account only when having RIP metric under 10.
 
 OSPF configuration defines the backbone area, spanning over the device's wlan
 interfaces. The static protocol defines some routes, we can see an usual route
-having next hop, a blackhole route, which means every packet chosing this route
+having next hop, a blackhole route, which means every packet choosing this route
 will get silently dropped, and a recursive route, where the next hop is the
 same as the next hop for IP \ip{192.168.0.42}.
 
@@ -174,16 +175,16 @@ waiting, BIRD calls a \verb|rx_hook| on that socket.
 
 Another very common usage pattern in network protocols are timers. You often
 need to send a message every ten seconds, or let something timeout. It would be
-too expensive to have three threads sleeping for every network prefix, so BIRD
+very inefficient to have three threads sleeping for every network prefix, so BIRD
 introduces internal timers. Timers have one hook and a time when it should be
 called. BIRD does not promise an exact time, but it ensures the hook would not
-be called sooner. The timeout for the select in the loop is set to the time
+be called sooner. The timeout for the \ttt{select} in the loop is set to the time
 until the first timer should be fired.
 
 When doing some computations that can take a long time, for example going
 through a complete routing table, you cannot do it in single hook as there can be
 other, possibly time sensitive, protocols waiting for their time. A mechanism
-called events was made for this purpose. An event can be \emph{scheduled},
+called events was made for this purpose. An event can be scheduled,
 and its hook will run at the end of current IO loop cycle. It is recommended to
 split such long-running pieces of code into several event calls, simulating
 multiple threads running with less overhead than actually having them.
@@ -195,7 +196,7 @@ matter much when it was set to ten seconds. But the same delay introduced to
 a few-millisecond timer can be critical.
 
 Traversing over a routing table spread over more iterations of the main IO loop
-brings several problems. When any event is called inbetween, you have to deal
+brings several problems. When any event is called in-between, you have to deal
 with added entries, removed entries (especially the current one being removed),
 and complete rehashes of the table. Routing table is stored in clever hash
 table called FIB, \emph{Forwarding Information Base}. This table follows
@@ -213,7 +214,7 @@ and memory usage of your daemon grows. When it overgrows the limited memory
 in embedded devices, your daemon is killed.
 
 BIRD tries to fight (not only) this problem with dedicated mechanisms for
-memory allocations. There are several memory pools from which resources are
+memory allocations. There are several resource pools from which resources are
 allocated. You can then deallocate either the resources one by one, or the
 whole pool at once. For example, every protocol instance has its own pool,
 which is freed when the instance is shut down.
@@ -227,7 +228,7 @@ closed, it deallocates its buffers.
 Resource pools offer multiple memory allocation strategies, making them more
 efficient. BIRD offers memory blocks (the usual strategy similar to
 malloc/free), linear memory pool and Slabs. Linear memory pools are handy when
-creating a temporary structure (which will be freed as a whole after using).
+creating a~temporary structure, which will be freed as a whole after using.
 Slabs are efficient in managing a lot of fixed-size blocks, e.g., the FIB nodes.
 
 \subsection{System dependent parts}

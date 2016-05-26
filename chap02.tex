@@ -2,7 +2,7 @@
 
 Unicast routing protocols try to build a tree for every destination network
 cooperatively. This tree is a spanning tree over some graph of networks and it
-is rooted at its destination. We can call it the shortest-path tree in respect
+is rooted at its destination. We can call it the shortest-path tree with respect
 to the destination. Every packet travels up the tree until it reaches its
 destination. Alternatively, you can imagine them building a shortest-path
 delivery tree for every source, rooted at the source, with traffic travelling
@@ -58,7 +58,7 @@ PIM, the DR joins $G$ on its upstream. Let us clarify the notation for joins and
 \begin{itemize}
   \item join$(S, G)$ joins the source-specific tree for source $S$ and group $G$.
   \item join$(*, G)$ joins the shared RP tree for RPA$(G)$ and group $G$.
-  \item join$(*, *, RPA)$ joins the shared RP tree for a RPA given, effectively
+  \item join$(*, *, \hbox{RPA})$ joins the shared RP tree for a RPA given, effectively
     joining every group with this RPA.
 \end{itemize}
 
@@ -105,7 +105,7 @@ down to all receivers.
 
 Eventually, for a receiver $R$, the DR on $R$'s link will send a $(S, G)$ join.
 This join will propagate towards $S$ until reaching first router with $(S,G)$
-state. It that time the receiver joins the source-specific tree for $(S,G)$ and
+state. At that time the receiver joins the source-specific tree for $(S,G)$ and
 the packets use the shortest path from $S$ to $R$. The situation is then similar to
 figure \ref{sg-tree}. Traffic uses the shortcut and it flows as multicast
 directly from $S$ over $E$ and $F$ to $R$.
@@ -161,7 +161,7 @@ metric to be better than the winner's, it sends an Offer.
 When the metric changes at one router, it is often a reaction to some router losing its
 link and it means that this change will propagate to other routers, changing their
 metrics too. In order to spare bandwidth, the current winner reacts to a better offer
-with a~Backoff message. It instructs the target router to wait for a while until
+with a~Backoff message. It instructs the offering router to wait for a while until
 unicast routing stabilizes. After a short period without other Offers, the winner
 passes the DF role in a Pass message.
 
@@ -171,7 +171,7 @@ lost. Then every node advertises an infinite metric, and no router is elected
 winner. Also, when the DF fails silently, other nodes know only after few
 missing hello messages. For the in-between period, no router is the DF.
 
-Much worse would be if there were two DFs on a link, that would lead to routing loops. The election protocol
+Much worse would be if there were two DFs on a link, as that would lead to routing loops. The election protocol
 is therefore biased to the safe side. For instance, an old DF sending a Pass immediately
 stops being a DF, even if all Pass messages were to be lost. Even when they are
 delivered, there is a short period without any router forwarding.
@@ -185,15 +185,15 @@ until the packet reaches the RPL. As there is no DF on the RPL, forwarding upstr
 there.
 
 Simultaneously, all routers listen for packets on their upstream links, and they
-forward packets from there to links where they are acting DFs. This way, apacket
+forward packets from there to links where they are acting DFs. This way, a packet
 is forwarded from $L_0, L_1, \dots$ in the reverse direction -- downstream.
 Downstream forwarding is conditioned on having receivers active. Upstream
 forwarding needs to be done even when there are no receivers.
 
 You can see that every DF can forward packets for one group upstream and
-downstream at the same time, explaining the name ``Bidirectional''.
+downstream at the same time, explaining the name ``bidirectional''.
 
 As opposed to other PIM modes, there is no need to encapsulate packets, thus
 there is no different behavior on the first-hop router. Also, the RPA does not have
 to be assigned to any router. This means that every router behaves the same, no
-matter where in the tree it is, simplyfing the overall protocol design.
+matter where in the tree it is, simplifying the overall protocol design.

@@ -40,14 +40,14 @@ used: \texttt{mrouted} and \texttt{pimd}.
 
 The purpose of this thesis is to explain how multicast works, introduce the
 reader to the world of multicast routing and implement one of existing
-multicast routing protocols. It would make no sense to implement another
-standalone routing daemon.
+multicast routing protocols. It would be possible to implement a standalone
+routing daemon, but its chance to catch on would be small.
 
 There once was a student project at MFF UK, that grew to worldwide usage -- the BIRD
 internet routing daemon. It currently supports a handful of unicast routing
 protocols, that can run at the same time. There are use-cases in which having closer communication
 between unicast and multicast routing can be an advantage. Let the primary goal of
-this thesis be to teach BIRD multicast routing.
+this thesis be to teach BIRD multicast routing.%
 \nomenclature{BIRD}{BIRD Internet Routing Daemon}
 
 The protocol chosen for this thesis is PIM-BIDIR. It is a somehow simplified

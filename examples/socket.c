@@ -13,7 +13,7 @@ addr.sin_port = htons(42000);
 addr.sin_addr.s_addr = htonl(INADDR_ANY);
 bind(fd, (struct sockaddr *) &addr, sizeof(addr));
 
-struct ip_mreq mreq = { 0 };
-inet_aton("224.42.42.42", &mreq.imr_multiaddr);
-setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+struct ip_mr mr = { 0 };
+inet_aton("224.42.0.1", &mr.imr_multiaddr);
+setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mr, sizeof(mr));
 }

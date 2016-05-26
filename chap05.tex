@@ -106,7 +106,7 @@ notation:
 protocol pim {
   group 224.42.0.0/16 {
     rpa 10.0.0.1;
-  }
+  };
 }
 \end{lstlisting}
 
@@ -161,7 +161,7 @@ protocol pim {
 
   The default value is 3.
 
-  The delays between election messages are not configurable, their value is
+  The delays between election messages are not configurable, their values are
   specified in the standard.
 
 \cfgitem{\cfg{override interval}{t}{time}}
@@ -195,9 +195,9 @@ setting (not the default though):
 
 \begin{lstlisting}
 protocol pim {
-  ipv4  { import none; export all;  }
-  mreq4 { import all;  export all;  }
-  mgrp4 { import all;  export none; }
+  ipv4  { import none; export all;  };
+  mreq4 { import all;  export all;  };
+  mgrp4 { import all;  export none; };
 }
 \end{lstlisting}
 
@@ -237,7 +237,7 @@ its topology to PIM as the MRIB. Unicast is still routed the same, but
 multicasts will use a~different path.
 
 When the PIM is electing the designated forwarder, it advertises the IGP metric, and
-the one with best metric becomes the forwarder. You can alter the metric
+the one with the best metric becomes the forwarder. You can alter the metric
 exported to PIM to any value you want, so you do not even have to run two
 separate routing protocols.
 \nomenclature{IGP}{Interior Gateway Protocol}
@@ -250,7 +250,7 @@ features.
 
 \begin{lstlisting}
 protocol mkernel {
-  mgrp4 { export all; }
+  mgrp4 { export all; };
 }
 \end{lstlisting}
 

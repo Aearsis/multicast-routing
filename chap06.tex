@@ -5,7 +5,7 @@ protocol, because a lot of code depends on the network state and temporary
 conditions. Also, especially for testing routing protocols, you need multiple
 networks, and run more than one instance of the routing daemon.
 
-There are several tools that can virtualize network topology. Most of them are
+There are several tools that can virtualize the network topology. Most of them are
 based on virtual machines or containers. This is useful for configuration or
 performance testing, but not that much for development, so we have created
 a~lightweight testing framework based on Linux network namespaces to suit our
@@ -20,7 +20,7 @@ It is more complicated with the PIM protocol, because we haven't
 found any software solution doing the bidirectional variant of PIM. There are
 routers from Cisco or Juniper which are able to manage a group in bidirectional
 mode, but we haven't been provided any to test our implementation against it.
-The network analyzer Wireshark is able to parse even Bidirectional PIM packets,
+The network analyzer Wireshark is able to parse even bidirectional PIM packets,
 and we've examined the packets our implementation sends whether they are
 constructed correctly. Of course, the PIM implementation in BIRDs works
 correctly against itself.
@@ -31,7 +31,7 @@ separate repository on Github.\footnote{https://github.com/Aearsis/netlab}
 It is inspired by the testing workflow of the BIRD team members. They were
 already using network namespaces with a collection of scripts. We have decided
 to clean up the scripts and give them an interface. New ideas to simplify the
-development came soon after.
+development process came soon after.
 
 To use this framework, you must clone the repository into the root of the BIRD
 repository, or change the path to BIRD inside the main executable of netlab.
@@ -69,17 +69,17 @@ packets. This is the network we've done the most of the testing on:
 \label{netlab}
 \end{figure}
 
-Moreover, every node has a dummy subnet, which is not drawn on the scheme.
+Moreover, every node has a dummy subnet, which is not drawn in the scheme.
 This is a very simple network, but you can test a lot of things there. The DF
 election is interesting at the \ttt{br1}, because \ttt{r2n1} and \ttt{r2n2}
-have the same metric. If you send packets from the \ttt{send} node, you should see
+have the same upstream metric. If you send packets from the \ttt{send} node, you should see
 a traffic on the \ttt{br0}, but not on the dummy subnet at \ttt{r1n2}.
 
 Currently, the netlab uses deterministic names. When the node name is
 \ttt{node}, then a namespace \ttt{netlab-node} will be created. When you define
-an ethernet pair from \ttt{r1} to \ttt{r2}, then it will create an interface
+an Ethernet pair from \ttt{r1} to \ttt{r2}, then it will create an interface
 \ttt{veth-r2} in the \ttt{netlab-r1} namespace, and \ttt{veth-r1} in the
-\ttt{netlab-r2} namespace. This naming convention is very conventional, you can
+\ttt{netlab-r2} namespace. This naming convention is very convenient, you can
 see immediately to which node is the interface connected.
 
 \section{Testing multicast}

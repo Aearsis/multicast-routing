@@ -1,16 +1,16 @@
 \chapter{Multicast in the BIRD}
 
 When we designed the multicast routing features into BIRD, we tried to respect
-local habits. We have separated the synchronization of routing tables with the
+local customs. We have separated the synchronization of routing tables with the
 kernel, which is system-dependent, into a protocol named \emph{mkernel}.
 Another standalone part is the IGMP protocol, which is independent on the
 particular multicast routing protocol used. The PIM protocol itself could be
-further divided into parts, but it would require the network administrator
+further divided into parts, but it would require the network administrator to
 understand the internal structure, making it significantly harder to configure.
 
 We decided, for now, to support IPv4 only. Supporting IPv6 would require adding
-another two protocols, because the kernel interface is separated and IGMP is
-IPv4 specific. For IPv6 there is a protocol called Multicast Listener Discovery
+another two protocols, because the kernel interface is separated and the IGMP is
+IPv4-specific. For IPv6 there is a protocol called Multicast Listener Discovery
 (MLD), and though they share common principles with IGMP, they differ not only
 in the address length. The PIM protocol is designed with IPv6 in mind.
 \nomenclature{MLD}{Multicast Listener Discovery}
@@ -83,7 +83,7 @@ group with different routing protocols on different interfaces.
 \section{The PIM}
 
 As already said, we have implemented only one multicast routing protocol to the
-BIRD, that is PIM in its Bidirectional variant. This variant is simpler than
+BIRD, that is PIM in its bidirectional variant. This variant is simpler than
 the others, but still needs to hold a lot of state in a way different from
 unicast routing protocols. Because of that, a great portion of PIM code only
 manages its internal state. Despite implementing only this variant, we have
@@ -134,7 +134,7 @@ the internal state.
   The \ttt{pim\_grp} instances are kept in a hash table in \ttt{pim\_proto}, but the
   downstream states are kept in a list inside the upstream state. Iterating
   over this list must be cheap anyway, because we need to forward every single
-  packet to all these interfaces (collectively).
+  packet to all these interfaces.
 
 \item[\ttt{pim\_neigh}]
   We maintain a direct-neighbor cache. For every neighbor, we need to remember
@@ -161,7 +161,7 @@ When the routers distribute traffic over the RP tree, they need to know which
 branches do have receivers for a group $G$. The join/prune mechanism is connected to
 the multicast requests table, and uses the channel in both ways. Everything
 starts, when a hosts joins a group by sending an IGMP membership report. The
-first-hop router notes it, and adds an entry to the request table. From thereit is
+first-hop router notes it, and adds an entry to the request table. From there it is
 propagated to the join/prune mechanism of an active PIM instance.
 
 As it is the first join for a group $G$, the \ttt{pim\_grp} structure for $G$ is
@@ -219,8 +219,8 @@ called. Responses are sent immediately.
 This part required a notable change in BIRD's IO loop. Previously, the BIRD's
 timers had a precision of one second only. The reasons for this were explained
 in the section \ref{bird-internals}. The DF election must be fast, its
-messages are spaced by $100\,$ms by default, so the BIRD timers were not an
-option. There already is a protocol which is more time sensitive, the BFD. It
+messages are spaced by $100\,$ms by default, so the BIRD timers were not
+applicable. There already is a protocol which is more time sensitive, the BFD. It
 solves this problem by having a separate IO loop. But BFD does not alter the
 routing tables, and BIRD internals are not thread-safe, so having a separate
 loop for PIM is not an option.
@@ -248,15 +248,15 @@ depending on the IP version.
 
 Multicast routes are slightly different from the unicast ones. In unicast routing,
 the most common route has a next hop router, only the last-hop routers have
-a~direct device route. As mutlicasts are always sent directly to link, no such
+a~direct device route. As multicasts are always sent directly to link, no such
 thing as a next-hop route exists. Furthermore, you often want to send a packet in
 multiple copies to several interfaces. We have discussed a bit how to control
 multicast routing in Linux in section \ref{mcast-kernel}, but we want to keep
 the internal tables system-independent.
 
-Every interface, which you want to use for multicast routing. must be assigned
-an index. These reflect the VIF indices, but the implementation does not depend
-on the system indices. In order to assign an index, you must enable the
+Every interface, which you want to use for multicast routing, must be assigned
+an index. Those reflect the VIF indices, but the implementation does not depend
+on them and can be changed any time. In order to assign an index, you must enable the
 interface for the mkernel protocol. If you don't, packets won't be
 forwarded, but you will not be warned. This is the expected behavior, because
 you probably do not want to forward traffic there, when you have explicitly
@@ -324,7 +324,10 @@ consists of sending an artificial IGMP packet with a packet type unused in the
 IGMP standard. The constants are defined in \ttt{<linux/mroute.h>}. Three
 upcalls can be found in the linux kernel source code:
 
-\noindent\begin{tabularx}{\textwidth}{r|X}
+\bgroup
+\renewcommand{\arraystretch}{1.5}
+\bigskip
+\noindent\begin{tabularx}{\textwidth}{lX}
   \ttt{IGMPMSG\_NOCACHE} & There is an MFC miss. This is the only upcall we need
   to listen to. \\
   \ttt{IGMPMSG\_WRONGVIF} & An MFC entry exists, but different incoming
@@ -334,6 +337,8 @@ upcalls can be found in the linux kernel source code:
   \ttt{IGMPMSG\_WHOLEPKT} & An MFC miss occured, but the kernel is configured to pass us
   the whole incoming packet for encapsulation. \\
 \end{tabularx}
+\bigskip
+\egroup
 
 When an MFC miss occurs, the packet is enqueued in the kernel. If the MFC entry
 is added fast enough, it will be resolved and forwarded afterwards. Because
@@ -349,3 +354,7 @@ oifs. The main problem in this method is reflecting changes in routing. When
 a route changes in BIRD, we are announced the group, but we need to change all
 the MFC entries for specific sources we have added. That means we have to
 remember what sources we've added and delete everything on every route change.
+
+Also, without exposing the group to RPA mapping, we cannot route groups without
+an upstream state in PIM. This results in an inconvenient but reasonable
+restriction -- every source must join the group it sends packets to.

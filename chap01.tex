@@ -62,9 +62,10 @@ Let us start with IGMP version 1 specified in Appendix I of \rfc{1112}. There
 are just two types of messages: \emph{membership query} and \emph{membership report}.
 Membership query is sent periodically by routers. It announces to hosts that there
 is an IGMPv1 capable router. This query is sent to \ttt{ALL-HOSTS} group with TTL~1 and
-therefore is limited to the local network. When a host receives a query, it replies with
-a membership report in 10 seconds with a random delay. No host should send
-reports for the \ttt{ALL-HOSTS} group, membership there is implicit and mandatory.
+therefore is limited to the local network. When a host receives a~query, it
+replies with a membership report for every group it wants to join, with
+a random delay up to 10 seconds. No host should send reports for the
+\ttt{ALL-HOSTS} group, membership there is implicit and mandatory.
 
 The report is sent to the group being reported. As noted above, the host does not have
 to send reports in order to listen. Filtering multicast traffic is made by other means.
@@ -175,9 +176,9 @@ receive unicasts:
 \lstinputlisting[firstline=8, lastline=18]{examples/socket.c}
 
 \noindent You might have expected that we would \emph{bind} the socket to the
-multicast group address. That is not true. A socket can join an arbitrary
+multicast group address. That is not true, a socket can join an arbitrary
 number of groups. Instead, we're binding it to a wildcard address and joining
-the group issuing a~\setsockopt call.
+the group issuing a~\setsockopt call. You can join more groups using multiple calls.
 
 One thing to note here. When there is a socket opened which joined a group, the host itself joins the group by means of IGMP. And when the host is
 joined, every other multicast-enabled socket will get all packets addressed to that
@@ -189,7 +190,10 @@ would have to join every group possible. That is certainly not the way to go.
 IGMPv2 suggests using the IP option \emph{Router Alert}. Every IP packet with this option
 set should be passed to all sockets that order it by this \setsockopt call:
 
-\lstinputlisting[firstline=8, lastline=11]{examples/igmp_socket.c}
+\begin{lstlisting}[language=c]
+int true = 1;
+setsockopt(fd, IPPROTO_IP, IP_ROUTER_ALERT, &true, sizeof(true));
+\end{lstlisting}
 
 \noindent There are multiple problems with this. Backward compatibility with
 IGMPv1 is broken, and standard does not force hosts to set the option. Some (e.g.,
@@ -206,10 +210,10 @@ a~control socket. That is a raw IP socket with a type \ttt{IPPROTO\_IGMP}.
 Then, a~\setsockopt call is needed:
 
 \begin{lstlisting}[language=c]
-int fd = socket(AF_INET, SOCK_RAW, IPPROTO_IGMP);
+int igmp_sock = socket(AF_INET, SOCK_RAW, IPPROTO_IGMP);
 
-int v = 1;
-setsockopt(fd, IPPROTO_IP, MRT_INIT, &v, sizeof(v));
+int true = 1;
+setsockopt(igmp_sock, IPPROTO_IP, MRT_INIT, &true, sizeof(true));
 \end{lstlisting}
 
 \noindent Syscalls \ttt{setsockopt} related to the multicast have option names starting
@@ -276,11 +280,14 @@ an array of \ttt{MAXVIFS} integers, indexed by the VIF index. Whenever a field f
 either 0 or 255, we call the VIF inactive for this entry, otherwise we call it
 active.
 
+\newdimen\charwidth
+\settowidth{\charwidth}{\ttt{X}} % Measure the size of a character
+
 The entries are indexed by source and group address. When a packet for a~pair $(S,G)$
 arrives on any interface, it is first checked whether it came from the
-interface \ttt{mfcc\_parent}. If not, it is dropped immediately. Otherwise
+interface \ttt{mfcc\_parent}. If not, it is dropped immediately. Otherwise,
 for every active VIF~$i$, the packet's TTL is compared to the threshold in
-\ttt{mfcc\_ttls[$i$]}. If the packet's TTL is greater, it is copied to the
+\ttt{mfcc\_ttls[\hbox to \charwidth{\hfill $i$\hfill}]}. If the packet's TTL is greater, it is copied to the
 VIF~$i$.
 
 In Linux, there are two more types of MFC entries: $(*,G)$ and $(*,*)$. These
@@ -298,7 +305,7 @@ interfaces: the uplink \ttt{wan}, wired \ttt{lan} and wireless
 bridged in your router, but not in this example.} A $(*,*)$ entry with
 \ttt{wan} and \ttt{lan} as active interfaces would enable you to send
 multicast packets from hosts on \ttt{lan}, which would then be forwarded to
-\ttt{wan}. Multicast packets sent on \ttt{wlan} would be dropped.
+\ttt{wan}. Multicast packets received on \ttt{wlan} would be dropped.
 
 Then, you can specify some~$(*,G)$ entries. Having a~$(*,G)$ entry with parent~$p$,
 when a packet comes on an interface~$j$, and there is a~$(*,*)$ entry with
