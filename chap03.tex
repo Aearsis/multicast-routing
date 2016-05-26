@@ -103,8 +103,7 @@ be able to route IPv6 traffic in a tunnel over IPv4 network. That is one of the
 reasons the BIRD team have chosen to make a big change and generalize internal
 structures to run both versions at the same time.
 
-My work is based on this dual-stack integrated version. Moreover, it is
-following an experimental development branch, where protocol-table connections
+My work is based on this dual-stack integrated version, where protocol-table connections
 are generalized and called \texttt{channels}. A protocol can have any number of
 channels of any type, thus receive route updates from more tables. PIM heavily
 uses this, because it is connected to three tables all the time.
