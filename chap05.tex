@@ -17,7 +17,7 @@ configuration of all three protocols.
 
 The IGMP listens for hosts' multicast reports, and fills the request table in
 the BIRD. The default values are well suited for the majority of use cases, but
-you still need to include the IGMP configuraton section to make IGMP run. Do it
+you still need to include the IGMP configuration section to make IGMP run. Do it
 so, whenever a router is connected to a link with local hosts. So, the most
 common configuration will be the following:
 
@@ -112,7 +112,7 @@ protocol pim {
 
 \noindent In order to function properly, all routers must be configured to use the same
 RPA for a group. When choosing a RPA, bear in mind that every multicast packet
-will have to be transfered to the link where RPA belongs. If you have only one
+will have to be transferred to the link where RPA belongs. If you have only one
 fixed source, the best choice for RPA is the source address. Otherwise you can
 choose some address belonging to the backbone of your network.
 
@@ -229,7 +229,7 @@ By changing the MRIB channel, you can unleash the full power of BIRD. To give
 an example, imagine you are running a system of networks running BGP. As
 a~metric, you are using the link reliability, having the BIRD select the most
 reliable route as the best one. Now you would like to use multicast for
-videoconferences. For transfering video, there are more important properties of
+video conferences. For transferring video, there are more important properties of
 the connection than reliability -- bandwidth, low and stable latency. In BIRD,
 this is very easy. Just create an internal routing table, run another routing
 protocol (either a different one, or BGP with different settings) and supply

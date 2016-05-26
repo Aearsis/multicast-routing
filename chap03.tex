@@ -28,7 +28,7 @@ Protocols are instances of independent modules. Every protocol is connected
 in routing tables, and such changes are then announced to all connected
 protocols. Different instances of one protocol, or even different protocols can
 communicate through the table and exchange routing information in a language
-undestood by both protocols.
+understood by both protocols.
 
 \section{Filters}
 Every protocol-table connection has two \emph{filters} attached: the
@@ -47,14 +47,14 @@ thus no information to share.
 
 Before accepting the route, filters may also modify the route's attributes.
 This mechanism is targeted to, but not limited to, setting route's metrics
-while transfering the route between different protocols. But you can do almost
+while transferring the route between different protocols. But you can do almost
 anything with the route, including, e.g., changing the next hop.
 
 \section{Non-routing protocols}
 Routing protocols often have some method to detect a neighbor failure using
 some form of hello messages. But these often have long reaction period in the
 order of tens of seconds. A protocol named BFD tries to provide faster, low
-overhead failure detection. It serves as an advisor to other protocols.
+overhead failure detection. It serves as an adviser to other protocols.
 \nomenclature{BFD}{Bidirectional Forwarding Detection}
 
 Another protocol implemented in the BIRD is RAdv. It is used by IPv6 routers to
@@ -65,7 +65,7 @@ advertise an available network prefix allowing hosts to autoconfigure.
 Nothing from what we have discussed communicates with the kernel, yet protocols
 and tables are all what the BIRD is made of. The synchronization of BIRD's
 tables with the kernel routing table is made through a special protocol
-called, suprisingly, \texttt{kernel}. The kernel protocol behaves like an usual
+called, surprisingly, \texttt{kernel}. The kernel protocol behaves like an usual
 protocol, and it is connected to one table through some filters. Every route it
 receives propagates to the kernel, and every route from the kernel is announced
 back. On systems where there can be more than one routing table (e.g., Linux),
@@ -163,11 +163,11 @@ change, route update, protocol is about to be shut down, reconfigured, and so on
 The most interesting hooks can be registered on sockets and timers.
 
 BIRD sockets are a thin layer over traditional Unix sockets. They try to hide
-incompatibilities between diferent Unixes by providing system-dependent
+incompatibilities between different Unixes by providing system-dependent
 implementation. But the main benefit of them is simplified receiving and
 sending packets using hooks.
 
-What might be suprising, BIRD is single-threaded. It has only one IO loop that
+What might be surprising, BIRD is single-threaded. It has only one IO loop that
 dispatches these hooks. That means you do not have to mess with locking in the
 common code, but it comes with a few drawbacks. In the loop, there is
 a \texttt{select} syscall waiting on all sockets. Whenever there are some data
@@ -205,11 +205,11 @@ rehashed. Furthermore, every node keeps a list of iterators, and when the node
 is removed, all its iterators are moved to the next element.
 
 \subsection{Resources}
-Common software problem, dangeorus especially for daemons, is memory leakage.
+Common software problem, dangerous especially for daemons, is memory leakage.
 When writing network software, one often needs to allocate temporary structures
 for holding additional information tied to an interface, neighbor or a network
 prefix. It can happen and often happens that you lose all handles to allocated
-memory and you cannot deallocate it. This forgotten memory cummulates over time
+memory and you cannot deallocate it. This forgotten memory accumulates over time
 and memory usage of your daemon grows. When it overgrows the limited memory
 in embedded devices, your daemon is killed.
 
@@ -246,7 +246,7 @@ simple as possible.
 
 When you look in the sysdep code, you will find for example functions to read
 system time, to communicate with the kernel or the socket abstraction layer,
-but also the whole implemetation of the main IO loop. If you look into the
+but also the whole implementation of the main IO loop. If you look into the
 forbidden lands of the kernel protocol, you will find arcane magic.
 
 \section{The user interface}

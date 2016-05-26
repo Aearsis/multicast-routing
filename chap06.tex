@@ -59,7 +59,7 @@ if_veth r1 r2 10.10.1
 \end{lstlisting}
 
 \noindent It is very simple to add bridges, dummy interfaces representing subnets, or to
-create a~namespace where to run other programs sending and receiving multicat
+create a~namespace where to run other programs sending and receiving multicast
 packets. This is the network we've done the most of the testing on:
 
 \begin{figure}[htp]
@@ -121,7 +121,7 @@ recv('224.42.42.42', 42000)
 \noindent For example, running the send script in the \ttt{send} namespace in the setup
 above, the script joins a group and then starts multicasting a lot of messages.
 If you run a~packet sniffer, for example \ttt{tcpdump}, you should see the traffic
-travelling upstream, stopping at the RPL. When you run the receiving script in
+traveling upstream, stopping at the RPL. When you run the receiving script in
 the \ttt{recv} namespace, messages should start coming. You can use the netlab
 for this purpose:
 

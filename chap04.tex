@@ -100,7 +100,7 @@ the internal state.
   This is the instance of the protocol.
 
 \item[\ttt{pim\_iface}]
-  For every interfece PIM knows, we need to open a socket. Information needed
+  For every interface PIM knows, we need to open a socket. Information needed
   to send hello packets is stored here. These are stored in a list
   \ttt{pim\_proto->ifaces}. Even the kernel keeps all interfaces in a list, so
   this should be safe and fast enough. Moreover, in every socket there is
@@ -165,13 +165,13 @@ first-hop router notes it, and adds an entry to the request table. From there it
 propagated to the join/prune mechanism of an active PIM instance.
 
 As it is the first join for a group $G$, the \ttt{pim\_grp} structure for $G$ is
-created. Existance of the upstream state results in sending a Join to the
+created. Existence of the upstream state results in sending a Join to the
 \emph{upstream neighbor} -- the Designated Forwarder on the upstream interface.
 When the upstream neighbor receives a join on downstream, it creates the
 downstream state, where it keeps an expiry timer. Then it adds an entry to the
 multicast request table. The entry is then, being a route, announced back to
 the PIM. Because the PIM does not make a difference between different multicast
-requests, it is essentialy the same situation as on the downstream router.
+requests, it is essentially the same situation as on the downstream router.
 
 \label{why-pim-mreq}
 This way the mechanism is split into two layers -- downstream, receiving PIM
@@ -334,7 +334,7 @@ upcalls can be found in the linux kernel source code:
   interface was expected. This upcall is sent only in one specific situation
   when switching the RP and the source-specific tree in PIM-SM. In other
   situations, this upcall is suppressed. \\
-  \ttt{IGMPMSG\_WHOLEPKT} & An MFC miss occured, but the kernel is configured to pass us
+  \ttt{IGMPMSG\_WHOLEPKT} & An MFC miss occurred, but the kernel is configured to pass us
   the whole incoming packet for encapsulation. \\
 \end{tabularx}
 \bigskip
