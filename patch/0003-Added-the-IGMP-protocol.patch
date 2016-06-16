@@ -1,0 +1,980 @@
+From b5b6ab653d633fed2980fb5ea8de5a118966cc4e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ond=C5=99ej=20Hlavat=C3=BD?= <aearsis@eideo.cz>
+Date: Fri, 27 May 2016 02:40:30 +0200
+Subject: [PATCH 3/4] Added the IGMP protocol
+
+---
+ bird.conf            |  12 ++
+ configure.in         |   4 +-
+ lib/ip.h             |   1 +
+ nest/proto.c         |   3 +
+ nest/protocol.h      |   3 +-
+ nest/route.h         |   1 +
+ proto/igmp/Makefile  |   4 +
+ proto/igmp/config.Y  |  77 ++++++++
+ proto/igmp/igmp.c    | 490 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ proto/igmp/igmp.h    | 113 ++++++++++++
+ proto/igmp/packets.c | 152 ++++++++++++++++
+ 11 files changed, 857 insertions(+), 3 deletions(-)
+ create mode 100644 proto/igmp/Makefile
+ create mode 100644 proto/igmp/config.Y
+ create mode 100644 proto/igmp/igmp.c
+ create mode 100644 proto/igmp/igmp.h
+ create mode 100644 proto/igmp/packets.c
+
+diff --git a/bird.conf b/bird.conf
+index bafd6ea..5195232 100644
+--- a/bird.conf
++++ b/bird.conf
+@@ -42,3 +42,15 @@ protocol static {
+ 
+ protocol rip {
+ }
++
++protocol igmp {
++#	interface "*" {
++#	  robustness 2;
++#	  query interval 125 s;
++#	  query response interval 10 s;
++#	  startup query interval 31 s;
++#	  startup query count 2;
++#	  last member query interval 1 s;
++#	  last member query count 2;
++#	};
++}
+diff --git a/configure.in b/configure.in
+index a0db0fb..8c100b6 100644
+--- a/configure.in
++++ b/configure.in
+@@ -167,8 +167,8 @@ fi
+ 
+ AC_SUBST(iproutedir)
+ 
+-# all_protocols="$proto_bfd babel bgp ospf pipe radv rip static"
+-all_protocols="$proto_bfd ospf pipe radv rip static"
++# all_protocols="$proto_bfd babel bgp igmp ospf pipe radv rip static"
++all_protocols="$proto_bfd igmp ospf pipe radv rip static"
+ 
+ all_protocols=`echo $all_protocols | sed 's/ /,/g'`
+ 
+diff --git a/lib/ip.h b/lib/ip.h
+index 6541ce1..d73ef80 100644
+--- a/lib/ip.h
++++ b/lib/ip.h
+@@ -20,6 +20,7 @@
+ #define IP4_OSPF_ALL_ROUTERS	ipa_build4(224, 0, 0, 5)
+ #define IP4_OSPF_DES_ROUTERS	ipa_build4(224, 0, 0, 6)
+ #define IP4_RIP_ROUTERS		ipa_build4(224, 0, 0, 9)
++#define IP4_IGMP_ROUTERS	ipa_build4(224, 0, 0, 22)
+ 
+ #define IP6_ALL_NODES		ipa_build6(0xFF020000, 0, 0, 1)
+ #define IP6_ALL_ROUTERS		ipa_build6(0xFF020000, 0, 0, 2)
+diff --git a/nest/proto.c b/nest/proto.c
+index f241674..634ac51 100644
+--- a/nest/proto.c
++++ b/nest/proto.c
+@@ -1262,6 +1262,9 @@ protos_build(void)
+ #ifdef CONFIG_BABEL
+   proto_build(&proto_babel);
+ #endif
++#ifdef CONFIG_IGMP
++  proto_build(&proto_igmp);
++#endif
+ 
+   proto_pool = rp_new(&root_pool, "Protocols");
+   proto_shutdown_timer = tm_new(proto_pool);
+diff --git a/nest/protocol.h b/nest/protocol.h
+index 4b7bfdf..14ebb88 100644
+--- a/nest/protocol.h
++++ b/nest/protocol.h
+@@ -81,7 +81,8 @@ void protos_dump_all(void);
+ 
+ extern struct protocol
+   proto_device, proto_radv, proto_rip, proto_static,
+-  proto_ospf, proto_pipe, proto_bgp, proto_bfd, proto_babel;
++  proto_ospf, proto_pipe, proto_bgp, proto_bfd,
++  proto_igmp;
+ 
+ /*
+  *	Routing Protocol Instance
+diff --git a/nest/route.h b/nest/route.h
+index 0a3e5cd..4d61511 100644
+--- a/nest/route.h
++++ b/nest/route.h
+@@ -399,6 +399,7 @@ typedef struct rta {
+ #define RTS_BGP 11			/* BGP route */
+ #define RTS_PIPE 12			/* Inter-table wormhole */
+ #define RTS_BABEL 13			/* Babel route */
++#define RTS_IGMP 14			/* IGMP multicast request */
+ 
+ #define RTC_UNICAST 0
+ #define RTC_BROADCAST 1
+diff --git a/proto/igmp/Makefile b/proto/igmp/Makefile
+new file mode 100644
+index 0000000..b7fd5d5
+--- /dev/null
++++ b/proto/igmp/Makefile
+@@ -0,0 +1,4 @@
++src := igmp.c packets.c
++obj := $(src-o-files)
++$(all-daemon)
++$(cf-local)
+diff --git a/proto/igmp/config.Y b/proto/igmp/config.Y
+new file mode 100644
+index 0000000..1094dbc
+--- /dev/null
++++ b/proto/igmp/config.Y
+@@ -0,0 +1,77 @@
++/*
++ *  BIRD -- IGMP protocol
++ *
++ *  (c) 2016 Ondrej Hlavaty <aearsis@eideo.cz>
++ *
++ *  Can be freely distributed and used under the terms of the GNU GPL.
++ */
++
++CF_HDR
++
++#include "proto/igmp/igmp.h"
++
++CF_DEFINES
++
++#define IGMP_CFG ((struct igmp_config *) this_proto)
++#define IGMP_IFACE ((struct igmp_iface_config *) this_ipatt)
++
++CF_DECLS
++
++CF_KEYWORDS(IGMP, ROBUSTNESS, STARTUP, QUERY, COUNT, INTERVAL, LAST, MEMBER, RESPONSE)
++
++CF_GRAMMAR
++
++CF_ADDTO(proto, igmp_proto '}' { igmp_config_finish(this_proto); })
++
++igmp_proto_start: proto_start IGMP {
++   this_proto = proto_config_new(&proto_igmp, $1);
++   igmp_config_init(IGMP_CFG);
++ }
++ ;
++
++igmp_proto:
++   igmp_proto_start proto_name '{'
++ | igmp_proto igmp_proto_item ';'
++ ;
++
++igmp_proto_item:
++   proto_item
++ | proto_channel
++ | INTERFACE igmp_iface
++ ;
++
++igmp_iface_start:
++{
++  this_ipatt = cfg_allocz(sizeof(struct igmp_iface_config));
++  add_tail(&IGMP_CFG->patt_list, NODE this_ipatt);
++  igmp_iface_config_init(IGMP_IFACE);
++};
++
++igmp_iface_item:
++   ROBUSTNESS expr { IGMP_IFACE->robustness = $2; }
++ | QUERY INTERVAL expr_us { IGMP_IFACE->query_int = $3; }
++ | STARTUP QUERY COUNT expr { IGMP_IFACE->startup_query_cnt = $4; }
++ | STARTUP QUERY INTERVAL expr_us { IGMP_IFACE->startup_query_int = $4; }
++ | QUERY RESPONSE INTERVAL expr_us { IGMP_IFACE->query_response_int = $4; }
++ | LAST MEMBER QUERY COUNT expr { IGMP_IFACE->last_member_query_cnt = $5; }
++ | LAST MEMBER QUERY INTERVAL expr_us { IGMP_IFACE->last_member_query_int = $5; }
++ ;
++
++igmp_iface_opts:
++   /* empty */
++ | igmp_iface_opts igmp_iface_item ';'
++ ;
++
++igmp_iface_opt_list:
++   /* empty */
++ | '{' igmp_iface_opts '}'
++ ;
++
++igmp_iface:
++  igmp_iface_start iface_patt_list_nopx igmp_iface_opt_list { igmp_iface_config_finish(IGMP_IFACE); }
++
++
++
++CF_CODE
++
++CF_END
+diff --git a/proto/igmp/igmp.c b/proto/igmp/igmp.c
+new file mode 100644
+index 0000000..877a0a8
+--- /dev/null
++++ b/proto/igmp/igmp.c
+@@ -0,0 +1,490 @@
++/*
++ *  BIRD --IGMP protocol
++ *
++ *  (c) 2016 Ondrej Hlavaty <aearsis@eideo.cz>
++ *
++ *  Can be freely distributed and used under the terms of the GNU GPL.
++ */
++
++/*
++ * DOC: Internet Group Management Protocol, Version 2
++ *
++ * The Internet Group Management Protocol (IGMP) is used by IP hosts to report
++ * their multicast group memberships to any immediately- neighboring multicast
++ * routers.  This memo describes only the use of IGMP between hosts and routers
++ * to determine group membership. Routers that are members of multicast groups
++ * are expected to behave as hosts as well as routers, and may even respond to
++ * their own queries.  IGMP may also be used between routers, but such use is
++ * not specified here.
++ *
++ * Its implementation is split into three files, |packets.c| handling low-level
++ * packet formats and |igmp.c| implementing BIRD interface and protocol logic.
++ *
++ * IGMP communicates with hosts, and publishes requests for groups and
++ * interfaces to the BIRD's mutlicast request table. It needs to hold state for
++ * every group with local listeners.
++ */
++
++#include "igmp.h"
++#include "lib/ip.h"
++#include "conf/conf.h"
++
++#define HASH_GRP_KEY(n)		n->ga
++#define HASH_GRP_NEXT(n)	n->next
++#define HASH_GRP_EQ(a,b)	ip4_equal(a,b)
++#define HASH_GRP_FN(k)		ip4_hash(k)
++
++
++/*
++ * A change occured, update the request tables.
++ */
++static void
++igmp_notify_routing(struct igmp_grp *grp, int join)
++{
++  net_addr_mreq4 addr = NET_ADDR_MREQ4(grp->ga, grp->ifa->iface->index);
++  struct igmp_proto *p = grp->ifa->proto;
++
++  TRACE(D_EVENTS, "iface %s %s group %I", grp->ifa->iface->name, join ? "joined" : "left", ipa_from_ip4(grp->ga));
++
++  net *n = net_get(p->mreq_channel->table, (net_addr *) &addr);
++  if (join)
++    {
++      rta a0 = {
++	  .src = p->p.main_source,
++	  .source = RTS_IGMP,
++	  .dest = RTD_MREQUEST,
++	  .iface = grp->ifa->iface,
++      };
++      rta *a = rta_lookup(&a0);
++      rte *e = rte_get_temp(a);
++
++      e->net = n;
++      rte_update2(p->mreq_channel, (net_addr *) &addr, e, p->p.main_source);
++    }
++  else
++    {
++      rte_update2(p->mreq_channel, (net_addr *) &addr, NULL, p->p.main_source);
++    }
++}
++
++static void
++igmp_gen_query_hook(struct timer *tm)
++{
++  struct igmp_iface *ifa = tm->data;
++
++  if (ifa->startup_query_cnt > 0)
++    ifa->startup_query_cnt--;
++
++  igmp_tx_query(ifa, IP4_NONE);
++
++  tm_start(ifa->gen_query, ifa->startup_query_cnt
++      ? ifa->cf->startup_query_int TO_S
++      : ifa->cf->query_int TO_S);
++}
++
++static void
++igmp_other_present_expire(struct timer *tm)
++{
++  struct igmp_iface *ifa = tm->data;
++
++  ifa->query_state = IGMP_QS_QUERIER;
++  tm_start(ifa->gen_query, 0);
++}
++
++/******************************************************************************
++                                Group state management
++ ******************************************************************************/
++
++
++static void
++igmp_grp_free(struct igmp_grp *grp)
++{
++  rfree(grp->join_timer);
++  rfree(grp->v1_host_timer);
++  rfree(grp->rxmt_timer);
++
++  HASH_REMOVE(grp->ifa->groups, HASH_GRP, grp);
++  mb_free(grp);
++}
++
++static void
++igmp_grp_v1_timer_expire(struct timer *tm)
++{
++  struct igmp_grp *grp = tm->data;
++
++  if (grp->join_state == IGMP_JS_V1MEMB)
++    grp->join_state = IGMP_JS_MEMB;
++  else
++    bug("V1 timer expired without v1 hosts");
++}
++
++static void
++igmp_grp_join_timer_expire(struct timer *tm)
++{
++  struct igmp_grp *grp = tm->data;
++
++  switch (grp->join_state) {
++    case IGMP_JS_NOMEMB:
++	bug("IGMP GRP without members expired.");
++      return;
++    case IGMP_JS_V1MEMB:
++    case IGMP_JS_MEMB:
++    case IGMP_JS_CHECK:
++      grp->join_state = IGMP_JS_NOMEMB;
++      igmp_notify_routing(grp, 0);
++      igmp_grp_free(grp);
++  }
++}
++
++static void
++igmp_grp_retransmit_expire(struct timer *tm)
++{
++  struct igmp_grp *grp = tm->data;
++
++  if (grp->join_state != IGMP_JS_CHECK)
++    return;
++
++  igmp_tx_query(grp->ifa, grp->ga);
++  tm_start(grp->rxmt_timer, grp->ifa->cf->last_member_query_int TO_S);
++}
++
++struct igmp_grp *
++igmp_grp_new(struct igmp_iface *ifa, ip4_addr *ga)
++{
++  struct igmp_proto *p = ifa->proto;
++  struct igmp_grp *grp = mb_allocz(p->p.pool, sizeof(struct igmp_grp));
++  grp->ga = *ga;
++  grp->ifa = ifa;
++  HASH_INSERT(ifa->groups, HASH_GRP, grp);
++
++  grp->join_timer = tm_new_set(ifa->proto->p.pool, igmp_grp_join_timer_expire, grp, 0, 0);
++  grp->rxmt_timer = tm_new_set(ifa->proto->p.pool, igmp_grp_retransmit_expire, grp, 0, 0);
++  grp->v1_host_timer = tm_new_set(ifa->proto->p.pool, igmp_grp_v1_timer_expire, grp, 0, 0);
++
++  return grp;
++}
++
++struct igmp_grp *
++igmp_grp_find(struct igmp_iface *ifa, ip4_addr *ga)
++{
++  return HASH_FIND(ifa->groups, HASH_GRP, *ga);
++}
++
++
++/******************************************************************************
++                                Iface management
++ ******************************************************************************/
++
++static inline int
++igmp_iface_is_up(struct igmp_iface *ifa)
++{
++  return !!ifa->sk;
++}
++
++static struct igmp_iface *
++igmp_iface_new(struct igmp_proto *p, struct iface *iface, struct igmp_iface_config *ic)
++{
++  struct igmp_iface *ifa = mb_allocz(p->p.pool, sizeof(struct igmp_iface));
++  add_tail(&p->iface_list, NODE ifa);
++  ifa->iface = iface;
++  ifa->cf = ic;
++  ifa->proto = p;
++  ifa->gen_id = random_u32();
++  ifa->startup_query_cnt = ifa->cf->startup_query_cnt;
++
++  ifa->gen_query = tm_new_set(p->p.pool, igmp_gen_query_hook, ifa, 0, 0);
++  ifa->other_present = tm_new_set(p->p.pool, igmp_other_present_expire, ifa, 0, 0);
++
++  HASH_INIT(ifa->groups, p->p.pool, 8);
++
++  if (igmp_sk_open(ifa))
++      log(L_ERR "Failed opening socket for IGMP");
++
++  ifa->query_state = IGMP_QS_QUERIER;
++  tm_start(ifa->gen_query, 0);
++
++  return ifa;
++}
++
++static int
++igmp_iface_down(struct igmp_iface *ifa)
++{
++  if (!igmp_iface_is_up(ifa))
++    return 0;
++
++  rfree(ifa->sk);
++  ifa->sk = NULL;
++  return 0;
++}
++
++static int
++igmp_iface_free(struct igmp_iface* ifa)
++{
++  rem_node(NODE ifa);
++
++  HASH_WALK_DELSAFE(ifa->groups, next, grp)
++    {
++      igmp_notify_routing(grp, 0);
++      igmp_grp_free(grp);
++    }
++  HASH_WALK_END;
++
++  rfree(ifa->gen_query);
++  rfree(ifa->other_present);
++  mb_free(ifa);
++  return 0;
++}
++
++static char *join_states[] = {
++  [IGMP_JS_NOMEMB] = "no members",
++  [IGMP_JS_MEMB] = "members",
++  [IGMP_JS_V1MEMB] = "v1 members",
++  [IGMP_JS_CHECK] = "about to expire",
++};
++
++static char *query_states[] = {
++  [IGMP_QS_INIT] = "initializing",
++  [IGMP_QS_QUERIER] = "querier",
++  [IGMP_QS_NONQUERIER] = "other querier present",
++};
++
++static void
++igmp_iface_dump(struct igmp_iface *ifa)
++{
++    struct igmp_proto *p = ifa->proto;
++
++    debug("\tInterface %s is %s, %s\n", ifa->iface->name, igmp_iface_is_up(ifa) ? "up" : "down", query_states[ifa->query_state]);
++
++    HASH_WALK(ifa->groups, next, grp)
++      TRACE(D_EVENTS, "\t\tGroup %I4: %s\n", grp->ga, join_states[grp->join_state]);
++    HASH_WALK_END;
++}
++
++struct igmp_iface *
++igmp_iface_find(struct igmp_proto *p, struct iface * ifa)
++{
++  struct igmp_iface * pif;
++  WALK_LIST(pif, p->iface_list)
++    if (pif->iface == ifa)
++      return pif;
++
++  return NULL;
++}
++
++void
++igmp_iface_config_init(struct igmp_iface_config * ifc)
++{
++  init_list(&ifc->i.ipn_list);
++
++  ifc->robustness = 2;
++  ifc->query_int = 125 S;
++  ifc->query_response_int = 10 S;
++  ifc->last_member_query_int = 1 S;
++  ifc->last_member_query_cnt = -1U;
++
++  ifc->startup_query_cnt = -1U;
++  ifc->startup_query_int = -1U;
++}
++
++void
++igmp_iface_config_finish(struct igmp_iface_config * ifc)
++{
++  /* Explicit constraints - probably bail out? */
++  if (ifc->robustness == 0)
++    cf_error("IGMP: Robustness must be at least 1.");
++
++  if (ifc->query_response_int > ifc->query_int)
++    cf_error("IGMP: The query response interval must not be greater than the query interval.");
++
++  /* Dependent default values */
++  if (ifc->startup_query_int == -1U)
++    ifc->startup_query_int = ifc->query_int / 4;
++
++  if (ifc->startup_query_cnt == -1U)
++    ifc->startup_query_cnt = ifc->robustness;
++
++  if (ifc->last_member_query_cnt == -1U)
++    ifc->last_member_query_cnt = ifc->robustness;
++
++  ifc->group_memb_int = ifc->robustness * ifc->query_int + ifc->query_response_int;
++  ifc->other_querier_int = ifc->robustness * ifc->query_int + ifc->query_response_int / 2;
++}
++
++/******************************************************************************
++				Protocol logic
++ ******************************************************************************/
++
++int
++igmp_query_received(struct igmp_iface *ifa, ip4_addr from)
++{
++
++  if (ifa->query_state != IGMP_QS_QUERIER)
++    return 0;
++
++  /* Find first IPv4 address of the interface */
++  /* XXX: cache and update in if_notify? */
++  struct ifa *my_addr = ifa_find_match(ifa->iface, NB_IP4);
++
++  /* Another router with lower IP shall be the Querier */
++  if (ip4_compare(ipa_to_ip4(my_addr->ip), from) > 0)
++    {
++      ifa->query_state = IGMP_QS_NONQUERIER;
++      tm_start(ifa->other_present, ifa->cf->other_querier_int TO_S);
++    }
++
++  return 0;
++}
++
++int
++igmp_membership_report(struct igmp_grp *grp, u8 igmp_version, u8 resp_time)
++{
++  struct igmp_proto *p = grp->ifa->proto;
++  uint last_state = grp->join_state;
++  TRACE(D_PACKETS, "Membership report received for group %I4 on iface %s", grp->ga, grp->ifa->iface->name);
++
++  if (grp->ifa->query_state == IGMP_QS_QUERIER && igmp_version == 1)
++    {
++      grp->join_state = IGMP_JS_V1MEMB;
++      tm_start(grp->v1_host_timer, grp->ifa->cf->group_memb_int TO_S);
++    }
++
++  if (grp->join_state != IGMP_JS_V1MEMB)
++    grp->join_state = IGMP_JS_MEMB;
++
++  tm_stop(grp->rxmt_timer);
++  tm_start(grp->join_timer, grp->ifa->cf->group_memb_int TO_S);
++
++  if (last_state == IGMP_JS_NOMEMB)
++    igmp_notify_routing(grp, 1);
++
++  return 0;
++}
++
++int
++igmp_leave(struct igmp_grp *grp, u8 resp_time)
++{
++  if (!grp)
++    return 0;
++
++  struct igmp_proto *p = grp->ifa->proto;
++
++  TRACE(D_PACKETS, "Leave received for group %I4 on iface %s", grp->ga, grp->ifa->iface->name);
++  grp->join_state = IGMP_JS_CHECK;
++  tm_start(grp->rxmt_timer, 0);
++  tm_start(grp->join_timer, (grp->ifa->cf->last_member_query_int TO_S) * grp->ifa->cf->last_member_query_cnt);
++  return 0;
++}
++
++/******************************************************************************
++				Others
++ ******************************************************************************/
++
++void
++igmp_config_init(struct igmp_config *cf)
++{
++   init_list(&cf->patt_list);
++   igmp_iface_config_init(&cf->default_iface_cf);
++   igmp_iface_config_finish(&cf->default_iface_cf);
++}
++
++void
++igmp_config_finish(struct proto_config *c)
++{
++  if (NULL == proto_cf_find_channel(c, NET_MREQ4))
++    channel_config_new(NULL, NET_MREQ4, c);
++}
++
++static void
++igmp_if_notify(struct proto *P, uint flags, struct iface *iface)
++{
++  struct igmp_proto *p = (struct igmp_proto *) P;
++  struct igmp_config *c = (struct igmp_config *) P->cf;
++
++  if (iface->flags & IF_IGNORE)
++    return;
++
++  if (flags & IF_CHANGE_UP)
++    {
++      struct igmp_iface_config *ic;
++      ic = (struct igmp_iface_config *) iface_patt_find(&c->patt_list, iface, iface->addr);
++      if (!ic)
++	ic = &c->default_iface_cf;
++      igmp_iface_new(p, iface, ic);
++      return;
++    }
++
++
++  if (flags & IF_CHANGE_DOWN)
++    {
++      struct igmp_iface * ifa = igmp_iface_find(p, iface);
++      igmp_iface_down(ifa);
++      igmp_iface_free(ifa);
++    }
++}
++
++static int
++igmp_start(struct proto *P)
++{
++  struct igmp_proto *p = (struct igmp_proto *) P;
++  init_list(&p->iface_list);
++  return PS_UP;
++}
++
++static int
++igmp_shutdown(struct proto *P)
++{
++  struct igmp_proto *p = (struct igmp_proto *) P;
++  struct igmp_iface *ifa;
++  WALK_LIST_FIRST(ifa, p->iface_list)
++    {
++      igmp_iface_down(ifa);
++      igmp_iface_free(ifa);
++    }
++
++  return PS_DOWN;
++}
++
++static void
++igmp_dump(struct proto *P)
++{
++  struct igmp_proto *p = (struct igmp_proto *) P;
++  struct igmp_iface *ifa;
++  WALK_LIST(ifa, p->iface_list)
++    igmp_iface_dump(ifa);
++}
++
++/*
++ * We do not want to receive any route updates.
++ */
++static int
++igmp_reject(struct proto *p, rte **e, ea_list **attrs, struct linpool *pool)
++{ return -1; }
++
++static struct proto *
++igmp_init(struct proto_config *C)
++{
++  struct proto *P = proto_new(C);
++  struct igmp_proto *p = (struct igmp_proto *) P;
++
++  p->mreq_channel = proto_add_channel(P, proto_cf_find_channel(C, NET_MREQ4));
++
++  p->cf = (struct igmp_config *) C;
++  P->if_notify = igmp_if_notify;
++  P->import_control = igmp_reject;
++
++  return P;
++}
++
++struct protocol proto_igmp = {
++	.name =		"IGMP",
++	.template =	"igmp%d",
++	.preference =	DEF_PREF_STATIC,
++	.proto_size =	sizeof(struct igmp_proto),
++	.config_size =	sizeof(struct igmp_config),
++	.channel_mask = NB_MREQ4,
++	.init =		igmp_init,
++	.dump =		igmp_dump,
++	.start =	igmp_start,
++	.shutdown =	igmp_shutdown,
++};
++
+diff --git a/proto/igmp/igmp.h b/proto/igmp/igmp.h
+new file mode 100644
+index 0000000..3a3f1d3
+--- /dev/null
++++ b/proto/igmp/igmp.h
+@@ -0,0 +1,113 @@
++/*
++ *  BIRD --IGMP protocol
++ *
++ *  (c) 2016 Ondrej Hlavaty <aearsis@eideo.cz>
++ *
++ *  Can be freely distributed and used under the terms of the GNU GPL.
++ */
++
++#ifndef _BIRD_IGMP_H_
++#define _BIRD_IGMP_H_
++
++#include "nest/bird.h"
++#include "nest/iface.h"
++#include "nest/locks.h"
++#include "nest/protocol.h"
++#include "nest/route.h"
++#include "conf/conf.h"
++#include "lib/hash.h"
++#include "lib/socket.h"
++#include "filter/filter.h"
++
++#include <linux/mroute.h>
++
++
++struct igmp_iface_config
++{
++  struct iface_patt i;
++
++  /* These are configurable */
++  uint robustness, startup_query_cnt, last_member_query_cnt;
++  btime query_int, query_response_int, startup_query_int,
++	last_member_query_int;
++
++  /* These are not */
++  btime group_memb_int, other_querier_int;
++};
++
++struct igmp_config
++{
++  struct proto_config c;
++  list patt_list;			/* list of ifaces (struct igmp_iface_config) */
++
++  struct igmp_iface_config default_iface_cf;
++};
++
++struct igmp_grp
++{
++  struct igmp_grp *next;		/* member of igmp_iface->groups */
++  struct igmp_iface *ifa;
++
++  ip4_addr ga;
++  uint join_state;
++  timer *join_timer, *v1_host_timer, *rxmt_timer;
++};
++
++#define IGMP_JS_NOMEMB  0
++#define IGMP_JS_MEMB    1
++#define IGMP_JS_V1MEMB  2
++#define IGMP_JS_CHECK   3
++
++struct igmp_iface
++{
++  node n;				/* member of igmp_proto->iface_list */
++  struct igmp_proto *proto;
++  struct iface *iface;
++  struct igmp_iface_config *cf;
++
++  sock *sk;				/* The one receiving packets */
++  uint query_state;			/* initial / querier / non-querier */
++  vifi_t vifi;				/* VIF containing just this device */
++
++  HASH(struct igmp_grp) groups;
++
++  u32 gen_id;
++  uint startup_query_cnt;		/* Remaining startup queries to send */
++  timer *gen_query, *other_present;
++};
++
++#define IGMP_QS_INIT            0
++#define IGMP_QS_QUERIER         1
++#define IGMP_QS_NONQUERIER      2
++
++struct igmp_proto
++{
++  struct proto p;
++  struct igmp_config *cf;
++
++  struct channel *mreq_channel;		/* Channel to multicast requests table */
++
++  list iface_list;			/* list of managed ifaces (struct igmp_iface) */
++};
++
++#define IGMP_PROTO  2
++
++/* igmp.c */
++int igmp_query_received(struct igmp_iface *ifa, ip4_addr from);
++int igmp_membership_report(struct igmp_grp *grp, u8 igmp_version, u8 resp_time);
++int igmp_leave(struct igmp_grp *grp, u8 resp_time);
++
++struct igmp_grp *igmp_grp_new(struct igmp_iface *ifa, ip4_addr *ga);
++struct igmp_grp *igmp_grp_find(struct igmp_iface *ifa, ip4_addr *ga);
++
++void igmp_config_init(struct igmp_config *cf);
++void igmp_config_finish(struct proto_config *cf);
++void igmp_iface_config_init(struct igmp_iface_config * ifc);
++void igmp_iface_config_finish(struct igmp_iface_config * ifc);
++
++/* packets.c */
++int igmp_sk_open(struct igmp_iface * ifa);
++int igmp_tx_query(struct igmp_iface *ifa, ip4_addr addr);
++
++
++#endif
+diff --git a/proto/igmp/packets.c b/proto/igmp/packets.c
+new file mode 100644
+index 0000000..3c8f85c
+--- /dev/null
++++ b/proto/igmp/packets.c
+@@ -0,0 +1,152 @@
++/*
++ *  BIRD --IGMP protocol
++ *
++ *  (c) 2016 Ondrej Hlavaty <aearsis@eideo.cz>
++ *
++ *  Can be freely distributed and used under the terms of the GNU GPL.
++ */
++
++#include "igmp.h"
++#include "lib/checksum.h"
++
++struct igmp_pkt {
++  u8 type;
++  u8 resp_time;
++  u16 checksum;
++  u32 addr;
++};
++
++#define IGMP_TP_MS_QUERY	0x11
++#define IGMP_TP_V1_MS_REPORT	0x12
++#define IGMP_TP_V2_MS_REPORT	0x16
++#define IGMP_TP_LEAVE		0x17
++
++#define DROP(args...) do { TRACE(D_PACKETS, "Dropping packet: " args); goto drop; } while(0)
++int
++igmp_accept(struct igmp_iface *ifa, ip4_addr from, struct igmp_pkt *pkt)
++{
++  struct igmp_proto *p = ifa->proto;
++
++  if (pkt->type == IGMP_TP_MS_QUERY)
++    return igmp_query_received(ifa, from);
++
++  ip4_addr addr = get_ip4(&pkt->addr);
++  struct igmp_grp *grp = igmp_grp_find(ifa, &addr);
++
++  if (pkt->type == IGMP_TP_LEAVE)
++    return igmp_leave(grp, pkt->resp_time);
++
++  if (!grp)
++    grp = igmp_grp_new(ifa, &addr);
++
++  switch (pkt->type) {
++    case IGMP_TP_V1_MS_REPORT:
++	igmp_membership_report(grp, 1, 10);
++	break;
++
++    case IGMP_TP_V2_MS_REPORT:
++	igmp_membership_report(grp, 2, pkt->resp_time);
++	break;
++
++    default:
++	DROP("Unknown type");
++	break;
++  }
++
++drop:
++  return 0;
++}
++
++int
++igmp_rx_hook(sock *sk, int len)
++{
++  struct igmp_iface *ifa = sk->data;
++  struct igmp_proto *p = ifa->proto;
++
++  struct igmp_pkt *pkt = (struct igmp_pkt *) sk_rx_buffer(sk, &len);
++
++  if (len < sizeof(struct igmp_pkt))
++    DROP("Shorter than 8 bytes");
++
++  /* Longer packets are in IGMPv3 */
++  if (len != 8)
++    DROP("Expected pkt length 8, not %i (probably newer IGMP)", len);
++
++  if (!ipsum_verify(pkt, len, NULL))
++    DROP("Invalid checksum");
++
++  return igmp_accept(sk->data, ipa_to_ip4(sk->faddr), pkt);
++
++drop:
++  return 0;
++}
++
++void
++igmp_err_hook(sock *sk, int err)
++{
++  struct igmp_iface *ifa = sk->data;
++  struct igmp_proto *p = ifa->proto;
++
++  TRACE(D_EVENTS, "IGMP err %m", err);
++}
++
++int
++igmp_tx_query(struct igmp_iface *ifa, ip4_addr addr)
++{
++  struct igmp_proto *p = ifa->proto;
++  struct igmp_pkt *pkt = (struct igmp_pkt *) ifa->sk->tbuf;
++
++  pkt->type = IGMP_TP_MS_QUERY;
++  pkt->resp_time = (ifa->cf->query_response_int TO_MS) / 100;
++  put_ip4(&pkt->addr, addr);
++
++  pkt->checksum = 0;
++  pkt->checksum = ipsum_calculate(pkt, sizeof(struct igmp_pkt), NULL);
++
++  ifa->sk->daddr = ip4_zero(addr) ? IP4_ALL_NODES : ipa_from_ip4(addr);
++
++  if (ip4_zero(addr))
++    TRACE(D_PACKETS, "Sending general query on iface %s", ifa->iface->name);
++  else
++    TRACE(D_PACKETS, "Sending query to grp %I4 on iface %s", addr, ifa->iface->name);
++
++  sk_send(ifa->sk, 8);
++  return 0;
++}
++
++int
++igmp_sk_open(struct igmp_iface *ifa)
++{
++  sock *sk = sk_new(ifa->proto->p.pool);
++  sk->type = SK_IGMP;
++  sk->saddr = ifa->iface->addr->ip;
++  sk->iface = ifa->iface;
++
++  sk->data = ifa;
++  sk->ttl = 1;
++  sk->tos = IP_PREC_INTERNET_CONTROL;
++  sk->rx_hook = igmp_rx_hook;
++  sk->err_hook = igmp_err_hook;
++
++  sk->tbsize = ifa->iface->mtu;
++
++  if (sk_open(sk) < 0)
++    goto err;
++
++  if (sk_setup_multicast(sk) < 0)
++    goto err;
++
++  if (sk_join_group(sk, IP4_IGMP_ROUTERS) < 0)
++    goto err;
++
++  if (sk_join_group(sk, IP4_ALL_ROUTERS) < 0)
++    goto err;
++
++  ifa->sk = sk;
++  return 0;
++
++err:
++  log(L_ERR "%s: Socket error: %s%#m", ifa->proto->p.name, sk->err);
++  rfree(sk);
++  return -1;
++}
+-- 
+2.8.3
+

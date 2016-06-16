@@ -1,6 +1,11 @@
-all: thesis.pdf
+all: presentation.pdf images.pdf
 
-thesis.pdf: $(patsubst %.asy, %.pdf, img/*.asy)
+IMAGES = $(patsubst %.asy, %.pdf, $(wildcard img/*.asy))
+
+thesis.pdf: ${IMAGES}
+presentation.pdf: ${IMAGES}
+images.pdf: ${IMAGES}
+	pdftk $(sort $(wildcard img/*.pdf)) output $@
 
 # LaTeX must be run multiple times to get references right
 thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib
@@ -11,8 +16,15 @@ thesis.pdf: thesis.tex $(wildcard *.tex) bibliography.bib
 	pdflatex $<
 	#cp thesis.pdf ~/Cloud/
 
-img/%.pdf: img/%.asy img/lib.asy
+presentation.pdf: presentation/presentation.tex
+	pdflatex $<
+
+IMGDEP += img/lib.asy img/unilib.asy
+IMGDEP += $(wildcard img/*.eps)
+
+img/%.pdf: img/%.asy ${IMGDEP}
 	asy -f pdf $< -o $@
+
 
 clean:
 	rm -f *.log *.dvi *.aux *.toc *.lof *.lot *.out *.bbl *.blg *.il *.nlo *.nls

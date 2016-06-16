@@ -1,0 +1,5 @@
+This patch was created against current (2016-05-27)
+ development branch, int-new. It cleanly applies
+and is tested on the following commit:
+
+  925aa14912329bafff38a9e5a3f675809ff97785

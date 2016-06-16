@@ -1,0 +1,228 @@
+\documentclass{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[czech]{babel}
+\usepackage{fancyvrb,ulem}
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+
+\title{Multicast Routing}
+\subtitle{Směrování multicastu}
+\author{Ondřej Hlavatý}
+\institute{MFF UK}
+
+\newcommand{\vrbalert}[2]{\alert<#1>{#2}}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}\frametitle{Cíl práce}
+  \begin{center}
+    \huge
+    Rozšíření směrovacího démonu BIRD \\
+    o schopnost směrování multicastu.
+  \end{center}
+\end{frame}
+
+\begin{frame}\frametitle{BIRD}
+  \begin{itemize}
+    \item UNIX, C
+    \item Původem softwarový projekt na MFF (1998)
+      \vfill {\small\it
+    \item Démon = tradiční název pro službu běžící na pozadí}
+  \end{itemize}
+\end{frame}
+
+
+\begin{frame}[t,fragile]\frametitle{Možnosti posílání zpráv}
+	\vbox to 0pt{%
+	\hfill\includegraphics<1>[scale=0.7]{img/cast_unicast.pdf}%
+	\vss}\nointerlineskip\vbox to 0pt{%
+	\hfill\includegraphics<2>[scale=0.7]{img/cast_broadcast.pdf}%
+	\vss}\nointerlineskip\vbox to 0pt{%
+	\hfill\includegraphics<3>[scale=0.7]{img/cast_multicast.pdf}%
+	\vss}\nointerlineskip %
+	\begin{itemize}[<+->]
+	  \item Unicast
+	  \item Broadcast
+	  \item Multicast
+	  \begin{itemize}[<.->]
+	    \item \texttt{224.0.0.0/4}
+	    \item \texttt{IGMP}
+	  \end{itemize}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{Směrování unicastu}
+
+	\vbox to 72pt{
+	\hfill\includegraphics[width=0.5\textwidth]{img/unicast_source_alfa.pdf}
+	\vss}
+
+\begin{Verbatim}[commandchars=\\\{\}]
+# ip route show
+\vrbalert{2}{alfa  dev eth-alfa proto kernel metric 1}
+\vrbalert{2}{B     dev ptp-b    proto kernel metric 1}
+\vrbalert{3}{C     via B        proto bird   metric 2}
+\vrbalert{3}{beta  via B        proto bird   metric 2}
+\vrbalert{3}{D     via B        proto bird   metric 2}
+\vrbalert{3}{gamma via B        proto bird   metric 3}
+\vrbalert{3}{delta via B        proto bird   metric 3}
+\vrbalert{2}{C     dev ptp-c    proto kernel metric 100}
+\end{Verbatim}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Směrování unicastu -- distribuční strom cíle}
+	
+	\begin{center}
+	\includegraphics[width=0.8\textwidth]{img/unicast_dest_delta.pdf}
+	\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Směrování multicastu}
+
+	\begin{itemize}
+	  \item Multicast Forwarding Cache
+	\end{itemize}
+\begin{verbatim}
+# ip mroute show
+(10.0.0.1, 224.42.0.1)   Iif: br0   Oifs: wlan0 eth0
+(10.0.0.2, 224.42.0.2)   Iif: br0   Oifs: eth0
+(10.0.1.2, 224.42.0.3)   Iif: eth0  Oifs:
+\end{verbatim}
+	\begin{itemize}
+	  \item Pro zprávu od odesílatele a cílovou skupinu: \\
+	    \quad pokud zpráva přišla z \texttt{Iif}, rozešli na všechny Oifs
+	  \item Nelze nastavovat \uv{ručně}
+	  \item Navíc udržování příjemců
+	\end{itemize}
+\end{frame}
+
+\begin{frame}\frametitle{Protocol Independent Multicast -- Bidirectional}
+  \begin{center}
+    \includegraphics[width=\textwidth]{img/rp-tree-bidir.pdf}
+  \end{center}
+\end{frame}
+
+\begin{frame}\frametitle{Protocol Independent Multicast -- Bidirectional}
+  \begin{itemize}
+    \item RFC 5015 (proposed standard)
+    \item Rendezvous-point (RP) společný pro skupiny
+    \item Jmenovaný směrovač pro síť (Designated Forwarder, DF) \\
+      \bigskip \pause
+      $\rightarrow$ unicastový distribuční strom cíle pro $RP$
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain,c]
+  \begin{center}
+    \usebeamerfont*{frametitle}
+    \Huge Implementace
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{BIRD}
+  \vbox to 0pt{\vss{\hfill\includegraphics{img/bird.pdf}\qquad\strut}\vss}\nointerlineskip\vbox to 0pt{\vss
+  \begin{itemize}
+    \item Tabulky
+    \item Protokoly
+    \item<3> Filtry
+  \end{itemize}\vss}
+\end{frame}
+
+\begin{frame}\frametitle{Návrh řešení směrování multicastu}
+  \begin{itemize}
+    \item Zobecnění routovacích tabulek pro multicastové routy a požadavky
+    \item Implementace třech BIRD protokolů: IGMP, PIM a rozhraní k jádru
+  \end{itemize}
+  \bigskip
+  \begin{center}
+    \includegraphics<.->[scale=0.8]{img/channels-pres.pdf}
+  \end{center}
+\end{frame}
+
+\begin{frame}\frametitle{IGMP}
+  \begin{itemize}
+    \item Komunikuje s cílovými stanicemi
+    \item Udržuje \uv{multicastové požadavky} \\
+      $\quad=$ na rozhraní $I$ je někdo ve skupině $G$
+    \item Musí přijímat všechny IGMP zprávy, tedy obcházet filtry v jádře \\
+      $\quad\rightarrow$ speciální socket
+  \end{itemize}
+\end{frame}
+
+\begin{frame}\frametitle{mkernel}
+  \begin{itemize}
+    \item Vyhodnocuje výpadky MFC, komunikuje s jádrem
+    \item API je původní z BSD (\texttt{setsockopt}, \texttt{ioctl})
+  \end{itemize}
+\end{frame}
+
+\begin{frame}\frametitle{PIM}
+  \begin{itemize}
+    \item Rozdělen na tři logické části: \par
+      \medskip
+      \begin{center}
+      \includegraphics[scale=0.8]{img/pim-pres.pdf}
+      \end{center}
+    \item \texttt{DF} -- udržování RP stromu
+    \item \texttt{JP} -- udržování multicastových požadavků
+    \item \texttt{FW} -- logika za přesměrováváním zpráv
+  \end{itemize}
+\end{frame}
+
+\begin{frame}\frametitle{Testování}
+  \begin{itemize}
+    \item Distribuovaný výpočet
+    \item Až na komplexní síti se projeví funkce
+    \item Testovací framework \texttt{netlab}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Netlab}
+   \vbox to 0pt{\vskip 11pt\hfill\includegraphics{img/pres-netlab.pdf}\qquad\strut\vss}\nointerlineskip
+  \begin{itemize}
+    \item Deklarativní popis sítě
+\begin{verbatim}
+	  netlab_node r1
+	  netlab_node r2
+	  if_veth r1 r2 10.10.1
+\end{verbatim}
+
+    \item Jednoduché CLI vycházející z potřeb testování
+
+\begin{verbatim}
+	  # ./netlab
+	  [netlab] # net_up
+	  [netlab] # start
+	  [netlab] # log r1
+	  [netlab] # restart r1
+	  [netlab] # stop
+	  [netlab] # net_down
+\end{verbatim}
+
+  \end{itemize}
+\end{frame}
+
+\begin{frame}\frametitle{Ukázka}
+\includegraphics[width=\textwidth]{img/netlab.pdf}
+\end{frame}
+
+\begin{frame}\frametitle{Budoucnost}
+  \begin{itemize}
+    \item Integrace do vývojové větve BIRDa
+    \item Rozšíření na IPv6
+    \item Rozšíření o další režimy PIM
+    \item Refaktorizace jádra
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \begin{center}
+    Děkuji za pozornost.
+  \end{center}
+\end{frame}
+\end{document}
